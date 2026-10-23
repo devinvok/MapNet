@@ -60,8 +60,10 @@ def log(*a):
     print(*a, flush=True)
 
 
-def evaluate(items, retrievers, k, reader, answer_with, model_judge):
-    rows = []
+def evaluate(items, retrievers, k, readers, answer_with, model_judge):
+    """Retrieve once per (question, method); then each reader answers the same
+    passages, one reader at a time (so Ollama doesn't swap models constantly)."""
+    rows, pending = [], []
     for n, item in enumerate(items, 1):
         gold = set(item["files"])
         for r in retrievers:
@@ -74,13 +76,20 @@ def evaluate(items, retrievers, k, reader, answer_with, model_judge):
                        rr=1 / rank if rank else 0.0, scanned=scanned, ms=ms, files=files[:3],
                        generated=item.get("generated", False), fresh=item.get("fresh", False),
                        evidence=evidence(hits, item))
-            if reader and r.name in answer_with:
-                a = reader.answer(item["q"], [P(f"{f}#", t) for f, t, _ in hits])
-                row.update(answer=a.text, answer_s=a.seconds, tokens_in=a.input_tokens,
-                           correct=judge(a.text, item, model_judge))
+            if readers and r.name in answer_with:
+                pending.append((row, item, hits))
             rows.append(row)
         if n % 10 == 0 or n == len(items):
-            log(f"    {n}/{len(items)} questions")
+            log(f"    {n}/{len(items)} questions retrieved")
+    for ri, reader in enumerate(readers or []):
+        log(f"    answering {len(pending)} with {reader.model} ...")
+        for row, item, hits in pending:
+            a = reader.answer(item["q"], [P(f"{f}#", t) for f, t, _ in hits])
+            res = dict(answer=a.text, answer_s=a.seconds, tokens_in=a.input_tokens,
+                       correct=judge(a.text, item, model_judge))
+            row.setdefault("by_reader", {})[reader.model] = res
+            if ri == 0:
+                row.update(res)
     return rows
 
 
@@ -126,19 +135,31 @@ def summarize(rows, names):
             answered=(sum(judged) / len(judged)) if judged else None, n_judged=len(judged),
             tokens_in=statistics.mean([r["tokens_in"] for r in rs if "tokens_in" in r] or [0]),
             answer_s=statistics.mean([r["answer_s"] for r in rs if "answer_s" in r] or [0]))
+        per = {}
+        for r in rs:
+            for model, res in r.get("by_reader", {}).items():
+                if res["correct"] is not None:
+                    per.setdefault(model, []).append(res["correct"])
+        out[name]["by_reader"] = {m: (sum(v) / len(v), len(v)) for m, v in per.items()}
     return out
 
 
 def table(summary, title):
+    models = list(dict.fromkeys(m for s in summary.values() for m in s.get("by_reader", {})))
+    ans_cols = [f"Answer right ({m})" for m in models] if len(models) > 1 else ["Answer right"]
     lines = [f"### {title}", "",
              "| Method | Right file in top-k | MRR | Answer in passages | Scanned per question | "
-             "Lookup (median) | Answer right |",
-             "|---|---|---|---|---|---|---|"]
+             "Lookup (median) | " + " | ".join(ans_cols) + " |",
+             "|---|---|---|---|---|---|" + "---|" * len(ans_cols)]
     for name, s in summary.items():
-        ans = f"{s['answered']:.0%} ({s['n_judged']})" if s["answered"] is not None else "n/a"
         ev = f"{s['evidence']:.0%}" if s["evidence"] is not None else "n/a"
+        if len(models) > 1:
+            ans = [f"{s['by_reader'][m][0]:.0%} ({s['by_reader'][m][1]})" if m in s["by_reader"] else "n/a"
+                   for m in models]
+        else:
+            ans = [f"{s['answered']:.0%} ({s['n_judged']})" if s["answered"] is not None else "n/a"]
         lines.append(f"| {name} | {s['found']:.0%} ({s['n']}) | {s['mrr']:.2f} | {ev} | "
-                     f"{s['scanned']:,.0f} | {s['ms']:.0f} ms | {ans} |")
+                     f"{s['scanned']:,.0f} | {s['ms']:.0f} ms | " + " | ".join(ans) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -149,8 +170,12 @@ def main():
     ap.add_argument("--generate", type=int, default=0, help="also generate N questions with the local model")
     ap.add_argument("--limit", type=int, help="use only the first N hand-written questions")
     ap.add_argument("--k", type=int, default=4, help="passages handed to the model")
-    ap.add_argument("--model", help="local reader model (default qwen2.5:3b)")
-    ap.add_argument("--embed-model", help="local embedding model (default nomic-embed-text)")
+    ap.add_argument("--model", help="default for both --reader-model and --map-model (qwen2.5:3b)")
+    ap.add_argument("--reader-model", help="the READER: answers from the passages. Several, comma-separated, "
+                    "to compare them on the same passages (e.g. qwen2.5:3b,qwen2.5:7b)")
+    ap.add_argument("--map-model", help="the CARTOGRAPHER: writes file descriptions and section cards")
+    ap.add_argument("--embed-model", help="the NAVIGATOR's embedding model, and embed-all's "
+                    "(default nomic-embed-text)")
     ap.add_argument("--retrieval-only", action="store_true", help="don't generate answers")
     ap.add_argument("--only", help="use only these top-level folders, for every method "
                     "(e.g. concepts,tasks,tutorials,setup)")
@@ -177,22 +202,31 @@ def main():
         items = items[: args.limit]
 
     # ---- models
-    reader = OllamaReader(args.model)
+    # three roles: the navigator walks the map (words + a small embedding model, never
+    # writes text), the cartographer writes the map, the reader answers from passages
+    reader = OllamaReader(args.map_model or args.model)  # the cartographer
     have_reader = reader.available()
+    reader_models = [m.strip() for m in (args.reader_model or args.model or "").split(",") if m.strip()] or [None]
+    answer_models = [OllamaReader(m) for m in reader_models]
     emb = OllamaEmbedder(args.embed_model, cache_dir=str(data / ".cache"))
     if not emb.available():
         log(f"! Embedding model '{emb.model}' not found in Ollama; using a weak no-model stand-in.\n"
             f"  The embed-all numbers will NOT represent real embedding search. "
             f"Fix: ollama pull {emb.model}")
         emb = LsaEmbedder()
+    if not have_reader:
+        log(f"! Map model '{reader.model}' not found in Ollama: methods that write cards are skipped. "
+            f"Fix: ollama pull {reader.model}")
     if args.retrieval_only:
-        answer_reader = None
-    elif have_reader:
-        answer_reader = reader
+        answer_readers = None
     else:
-        log(f"! Reader model '{reader.model}' not found in Ollama; answers use the no-model "
-            f"extractive fallback. Fix: ollama pull {reader.model}")
-        answer_reader = ExtractiveReader()
+        answer_readers = [r for r in answer_models if r.available()]
+        for r in answer_models:
+            if not r.available():
+                log(f"! Reader model '{r.model}' not found in Ollama; skipping it. Fix: ollama pull {r.model}")
+        if not answer_readers:
+            log("! No reader model available; answers use the no-model extractive fallback.")
+            answer_readers = [ExtractiveReader()]
 
     # ---- working copy; hold out the files of 'fresh' questions
     work = data / "work" / corpus.name
@@ -305,12 +339,14 @@ def main():
             items += generate(shared, reader, args.generate, log=log)
         else:
             log("! --generate needs the reader model in Ollama; skipping.")
-    model_judge = ModelJudge(reader) if have_reader else None
+    judge_model = reader if have_reader else next((r for r in (answer_readers or []) if r.available()
+                                                   and isinstance(r, OllamaReader)), None)
+    model_judge = ModelJudge(judge_model) if judge_model else None
 
     # ---- phase A
     normal = [x for x in items if not x.get("fresh")]
     log(f"\nPhase A: {len(normal)} questions ...")
-    rows = evaluate(normal, retrievers, args.k, answer_reader, args.answer_with.split(","), model_judge)
+    rows = evaluate(normal, retrievers, args.k, answer_readers, args.answer_with.split(","), model_judge)
 
     # ---- phase B: freshness
     ingest = {}
@@ -349,14 +385,15 @@ def main():
                 ingest["map + cards (cards written by the model on arrival)"] = time.perf_counter() - t0
             else:
                 ingest["map + cards (no model: new files have no cards)"] = time.perf_counter() - t0
-        rows += evaluate(fresh_items, retrievers, args.k, answer_reader,
+        rows += evaluate(fresh_items, retrievers, args.k, answer_readers,
                          args.answer_with.split(","), model_judge)
 
     # ---- report
     out = HERE / "results" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
     meta = dict(corpus=str(corpus), files=n_files, passages=n_chunks, k=args.k,
-                reader=getattr(answer_reader, "model", None), embedder=emb.name,
+                reader=", ".join(r.model for r in answer_readers) if answer_readers else None,
+                cartographer=reader.model if have_reader else None, embedder=emb.name,
                 build_map_s=round(shared.build_s, 2), build_embed_s=round(embed_all.build_s, 2),
                 ingest_s={k: round(v, 3) for k, v in ingest.items()})
     groups = {"Hand-written questions": [r for r in rows if not r["generated"] and not r["fresh"]],
@@ -364,7 +401,9 @@ def main():
               "Fresh files (added after indexing)": [r for r in rows if r["fresh"]]}
     md = [f"# MapNet real test — {datetime.now():%Y-%m-%d %H:%M}", "",
           f"- Corpus: `{corpus}` — {n_files:,} files, {n_chunks:,} passages",
-          f"- Reader: {meta['reader'] or 'none (retrieval only)'}; embeddings: {emb.name}; k = {args.k}",
+          f"- Reader (answers): {meta['reader'] or 'none (retrieval only)'}; "
+          f"cartographer (writes the map): {meta['cartographer'] or 'none'}; "
+          f"navigator: words + {emb.name}; k = {args.k}",
           f"- Build time: map {meta['build_map_s']}s, embeddings {meta['build_embed_s']}s",
           *([f"- Cards: {card_info[0]:,} of {n_files:,} files carded, "
              f"{card_info[1] / 60:.0f} min of model time"] if card_info else []),

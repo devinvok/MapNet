@@ -66,6 +66,31 @@ Apple silicon. These are estimates; your report records the real times.
 The report lands in `realtest/results/<timestamp>/report.md`, with every
 question, retrieved file and answer in `results.json` next to it.
 
+## Three models, three jobs
+
+Because the map does the finding, the work splits into roles that need very
+different models:
+
+| Role | Job | Runs | Model |
+|---|---|---|---|
+| **Navigator** | walks the map to the right passages; never writes text | every question | words + a small embedding model (`--embed-model`, default `nomic-embed-text`, ~137M) |
+| **Cartographer** | writes the map: file descriptions, section cards | once per file (or on change) | `--map-model` |
+| **Reader** | reads the k passages the navigator found and answers | every question | `--reader-model` |
+
+The reader only ever sees k passages, so it can be much bigger than a model that
+has to search. Give several readers to compare them **on exactly the same
+passages** in one run:
+
+```bash
+ollama pull qwen2.5:7b
+python -m realtest.run --only concepts,tasks,tutorials,setup --map-model qwen2.5:3b --reader-model qwen2.5:3b,qwen2.5:7b --skip keyword-all,map,map+embed
+```
+
+The report then has one "Answer right" column per reader. Retrieval runs once;
+then each reader answers every method's passages in turn (so Ollama isn't
+swapping models on every question). A 7B reader needs about 6 GB of free memory
+and roughly twice the time per answer of a 3B one.
+
 ## Section cards
 
 `map+lazy-cards` needs no preparation: it maps files as questions reach them, so

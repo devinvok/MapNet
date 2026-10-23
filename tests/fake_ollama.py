@@ -19,7 +19,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(obj).encode())
 
     def do_GET(self):
-        self._send({"models": [{"name": "qwen2.5:3b"}, {"name": "nomic-embed-text:latest"}]})
+        self._send({"models": [{"name": "qwen2.5:3b"}, {"name": "qwen2.5:7b"},
+                               {"name": "nomic-embed-text:latest"}]})
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -35,6 +36,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/chat":
             ctx = body["messages"][1]["content"]
             first = ctx.split("---", 3)[-1][:120].replace("\n", " ")
+            if body["model"] == "qwen2.5:7b":  # the "bigger reader" quotes more of the passages
+                first = ctx.split("Question:")[0][-2000:].replace("\n", " ")
             self.send_response(200)
             self.end_headers()
             for piece in [first, " (source: x)"]:

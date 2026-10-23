@@ -90,7 +90,11 @@ router can find files no one has visited yet. With `--meaning`, the map is also
 walked by meaning (a small local embedding model): it embeds the map, one vector
 per file and, on arrival, per section, not every passage, and it only ever adds
 candidates to the word router's, so a wrong guess can't push out a right one.
-Cards guide routing only;
+The work splits into three roles with very different models: a tiny
+**navigator** that walks the map on every question and never writes text, a
+**cartographer** that writes the map once per file, and a **reader** that only
+ever sees the few passages found, so it can be a much bigger model
+(`--reader-model`, `--map-model`). Cards guide routing only;
 they are never shown to the answering model. (To map a whole folder in advance:
 `python -m mapnet.cards FOLDER`.)
 

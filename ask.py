@@ -4,6 +4,7 @@ The folder is watched: add, edit or delete files and the next question sees it.
 
     python ask.py examples/company
     python ask.py ~/Documents/work --role hr --model llama3.2:3b
+    python ask.py ~/Documents/work --reader-model qwen2.5:7b --map-model qwen2.5:3b --meaning
     python ask.py ~/Documents/work --meaning   # also route by meaning (needs: ollama pull nomic-embed-text)
     python ask.py ~/Documents/work --cards .mapnet-cards   # after: python -m mapnet.cards ~/Documents/work
 
@@ -31,7 +32,9 @@ if not sys.stdout.isatty():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder")
-    ap.add_argument("--model", help="Ollama model (default: $MAPNET_MODEL or qwen2.5:3b)")
+    ap.add_argument("--model", help="default for --reader-model and --map-model ($MAPNET_MODEL or qwen2.5:3b)")
+    ap.add_argument("--reader-model", help="the model that reads the passages and answers (e.g. qwen2.5:7b)")
+    ap.add_argument("--map-model", help="the model that writes the map: file descriptions, section cards")
     ap.add_argument("--role", default="employee", help="comma-separated roles for permissions")
     ap.add_argument("--no-model", action="store_true", help="skip the LLM, show best passage")
     ap.add_argument("--notes", default=".mapnet-notes.json", help="where agent notes are kept")
@@ -46,7 +49,7 @@ def main():
     if args.no_model:
         reader = ExtractiveReader()
     else:
-        reader = OllamaReader(args.model)
+        reader = OllamaReader(args.reader_model or args.model)
         if not reader.available():
             print(f"{YELLOW}Ollama model '{reader.model}' not found at {reader.host}.{RESET}\n"
                   f"Install Ollama (ollama.com), then: ollama pull {reader.model}\n"
@@ -67,7 +70,13 @@ def main():
             print(f"\n{GREEN}[map] mapped {rel} in the background: {n} sections ({secs:.0f}s){RESET}\n> ",
                   end="", flush=True)
 
-    mapper = reader if isinstance(reader, OllamaReader) and not args.no_map_files else None
+    mapper = None
+    if not args.no_map_files and not args.no_model:
+        mapper = OllamaReader(args.map_model or args.model)
+        if not mapper.available():
+            print(f"{YELLOW}Map model '{mapper.model}' not found; files will be navigated by headings only. "
+                  f"Fix: ollama pull {mapper.model}{RESET}")
+            mapper = None
     embedder = None
     if args.meaning:
         from mapnet.embed import OllamaEmbedder
@@ -82,7 +91,9 @@ def main():
                   map_files_with=mapper, on_mapped=on_mapped, embedder=embedder)
     n_src = len(a.map.sources())
     print(f"{BOLD}MapNet{RESET} mapped {n_src} files ({a.map.root.n_docs} passages) "
-          f"in {time.perf_counter() - t0:.1f}s. Model: {reader.model}. Watching for changes.")
+          f"in {time.perf_counter() - t0:.1f}s. Watching for changes.\n"
+          f"Navigator: words{' + ' + embedder.model if embedder else ''} | "
+          f"map writer: {mapper.model if mapper else 'none'} | reader: {reader.model}")
     print(("Files are mapped section by section the first time a question reaches them "
            "(the first visit takes a few seconds longer), and every file gets a short "
            "description in the background.\n") if mapper else

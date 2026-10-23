@@ -273,3 +273,34 @@ def test_full_chain_in_real_test(tmp_path):
     finally:
         srv.shutdown()
         shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
+
+
+def test_three_roles_and_two_readers(tmp_path):
+    """Navigator, cartographer and reader are separate; two readers answer the same passages."""
+    import subprocess
+    import sys
+
+    srv, host = start()
+    try:
+        out = subprocess.run(
+            [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
+             "--questions", str(ROOT / "realtest/questions/sample-company.json"), "--data", str(tmp_path / "d"),
+             "--map-model", "qwen2.5:3b", "--reader-model", "qwen2.5:3b,qwen2.5:7b",
+             "--skip", "map+meaning,map+embed"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600,
+            env=dict(os.environ, OLLAMA_HOST=host))
+        assert out.returncode == 0, out.stderr[-2000:]
+        assert "Answer right (qwen2.5:3b) | Answer right (qwen2.5:7b)" in out.stdout
+        assert "cartographer (writes the map): qwen2.5:3b" in out.stdout
+        assert "navigator: words + nomic-embed-text" in out.stdout
+        res = json.loads(next((ROOT / "realtest" / "results").iterdir()).joinpath("results.json")
+                         .read_text(encoding="utf-8"))
+        answered = [r for r in res["rows"] if "by_reader" in r]
+        assert answered and all(set(r["by_reader"]) == {"qwen2.5:3b", "qwen2.5:7b"} for r in answered)
+        # same passages, different reader: the bigger fake reader answers more often
+        s7 = sum(r["by_reader"]["qwen2.5:7b"]["correct"] for r in answered)
+        s3 = sum(r["by_reader"]["qwen2.5:3b"]["correct"] for r in answered)
+        assert s7 >= s3
+    finally:
+        srv.shutdown()
+        shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
