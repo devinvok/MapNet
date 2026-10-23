@@ -124,3 +124,30 @@ class MapEmbed:
         order = np.argsort(-s)[:k]
         cost = r.cost - sum(len(self.s.map.find(p).doc_ids) for p in r.sources_searched) + len(rows)
         return [(_file(self.e.ids[rows[i]]), self.e.texts[rows[i]], float(s[i])) for i in order], cost
+
+
+class MapLazy:
+    """map+sections, where each file is mapped (carded by the local model) the
+    first time a question arrives at it. Starts with no cards at all: the map
+    gets better as questions come in, and the cost of every first visit is
+    counted in this method's lookup time."""
+
+    name = "map+lazy-cards"
+
+    def __init__(self, shared, store, reader):
+        from mapnet.cards import LazyCarder
+        self.s = shared
+        self.lazy = LazyCarder(shared.fm, store, reader, sync_top=1, background=False)
+
+    def search(self, q, k):
+        m = self.s.map
+        old, m.section_weight = m.section_weight, 1.0
+        try:
+            r = m.search(q, k=k, min_score=0.12)
+            if self.lazy.visit(r.sources_searched):
+                again = m.search_in(q, r.sources_searched, k=k)
+                again.cost += r.cost
+                r = again
+        finally:
+            m.section_weight = old
+        return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost

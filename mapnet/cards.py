@@ -204,3 +204,88 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --------------------------------------------------------------------------- #
+# Map a file when an agent first arrives at it (DNS style: resolve the
+# general level first, map the specific level on demand, cache the answer)
+# --------------------------------------------------------------------------- #
+class LazyCarder:
+    """Writes a file's section cards the first time the router lands on it.
+
+    - The top file of a lookup is mapped right away, so the visit that
+      arrives there already uses the file's map to reach the exact passage.
+    - Other files the lookup touched are queued and mapped in the background.
+    - Cards are stored by file content: a revisit costs nothing, a changed file
+      is mapped again on its next visit, and the cards also flow up into the
+      folder map, so the file gets easier to find from then on.
+    """
+
+    def __init__(self, folder_map, store, reader, sync_top=1, background=True, on_mapped=None):
+        import queue
+        import threading
+        self.fm, self.store, self.reader = folder_map, store, reader
+        self.sync_top = sync_top
+        self.on_mapped = on_mapped  # callback(path, n_cards, seconds, where)
+        self.tried: dict[str, object] = {}  # path -> node already handled
+        self.files = 0
+        self.seconds = 0.0
+        self._q = queue.Queue()
+        if background:
+            threading.Thread(target=self._worker, daemon=True).start()
+
+    @staticmethod
+    def _rel(path):
+        return path[len("_top/"):] if path.startswith("_top/") else path
+
+    def _map_file(self, path, where):
+        rel = self._rel(path)
+        try:
+            text = read_file(self.fm.root / rel)
+        except OSError:
+            return 0.0
+        t0 = time.perf_counter()
+        cards = self.store.get(text)
+        if cards is None:
+            cards = make_cards(text, rel, self.reader)
+            self.store.put(text, cards, dict(file=rel, model=self.reader.model,
+                                             seconds=round(time.perf_counter() - t0, 1)))
+        secs = time.perf_counter() - t0
+        with self.fm.lock:
+            try:
+                node = self.fm.map.find(path)
+            except KeyError:
+                return secs
+            if cards and not node.cards:
+                self.fm.map.set_cards(node, cards)
+        self.files += 1
+        self.seconds += secs
+        if self.on_mapped:
+            self.on_mapped(rel, len(cards), secs, where)
+        return secs
+
+    def _worker(self):
+        while True:
+            path = self._q.get()
+            try:
+                self._map_file(path, "background")
+            except Exception:
+                pass
+
+    def visit(self, paths):
+        """Call with the files a lookup routed to, best first. Returns the files
+        mapped right now as [(path, seconds)]."""
+        mapped = []
+        for i, path in enumerate(paths):
+            try:
+                node = self.fm.map.find(path)
+            except KeyError:
+                continue
+            if node.kind != "source" or node.cards or self.tried.get(path) is node:
+                continue
+            self.tried[path] = node
+            if i < self.sync_top:
+                mapped.append((path, self._map_file(path, "on arrival")))
+            else:
+                self._q.put(path)
+        return mapped

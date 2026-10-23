@@ -142,3 +142,75 @@ def test_harness_with_cards_and_subset(tmp_path):
     assert "map+cards" in out.stdout and "map+sections" in out.stdout
     assert "1 of" in out.stdout  # one file carded
     shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
+
+
+# ---- mapping files on arrival (DNS style), and the full pipeline with fake models
+import os  # noqa: E402
+import time  # noqa: E402
+
+from fake_ollama import Handler, start  # noqa: E402
+
+
+def test_files_are_mapped_on_arrival(tmp_path):
+    from mapnet.assistant import Assistant
+    from mapnet.llm import ExtractiveReader, OllamaReader
+
+    srv, host = start()
+    try:
+        folder = tmp_path / "company"
+        shutil.copytree(ROOT / "examples" / "company", folder)
+        mapped_bg = []
+        a = Assistant(folder, reader=ExtractiveReader(), cards=CardStore(tmp_path / "cards"),
+                      map_files_with=OllamaReader("qwen2.5:3b", host=host),
+                      on_mapped=lambda rel, n, s, where: mapped_bg.append((rel, where)))
+        q = "What are the payment terms with Kalmar Metals?"
+        t1 = a.ask(q, use_notes=False)
+        assert [p for p, _ in t1.mapped] == ["finance/vendors/kalmar-metals.md"]  # top file, right away
+        assert a.map.find("finance/vendors/kalmar-metals.md").cards
+        assert t1.sources[0] == "finance/vendors/kalmar-metals.md"
+        t2 = a.ask(q, use_notes=False)
+        assert t2.mapped == []  # cached: a revisit costs nothing
+        for _ in range(50):  # the other files that lookup touched get mapped in the background
+            if any(w == "background" for _, w in mapped_bg):
+                break
+            time.sleep(0.1)
+        assert any(w == "background" for _, w in mapped_bg)
+        # a changed file is mapped again on its next visit
+        f = folder / "finance" / "vendors" / "kalmar-metals.md"
+        f.write_text(f.read_text(encoding="utf-8") + "\n\nNew: payments go to a new IBAN.\n", encoding="utf-8")
+        a.fm.sync()
+        t3 = a.ask(q, use_notes=False)
+        assert [p for p, _ in t3.mapped] == ["finance/vendors/kalmar-metals.md"]
+        # a fresh assistant reuses the stored file maps without calling the model
+        before = Handler.calls.get("/api/generate", 0)
+        b = Assistant(folder, reader=ExtractiveReader(), cards=CardStore(tmp_path / "cards"),
+                      map_files_with=OllamaReader("qwen2.5:3b", host=host), background=False)
+        assert b.ask(q, use_notes=False).mapped == []
+        assert Handler.calls.get("/api/generate", 0) == before
+        assert b.map.find("finance/vendors/kalmar-metals.md").cards
+    finally:
+        srv.shutdown()
+
+
+def test_full_real_test_with_fake_models(tmp_path):
+    import subprocess
+    import sys
+
+    srv, host = start()
+    try:
+        env = dict(os.environ, OLLAMA_HOST=host)
+        out = subprocess.run(
+            [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
+             "--questions", str(ROOT / "realtest/questions/sample-company.json"),
+             "--data", str(tmp_path / "data")],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600, env=env)
+        assert out.returncode == 0, out.stderr[-2000:]
+        for name in ["keyword-all", "embed-all", "map+sections", "map+lazy-cards", "map+embed"]:
+            assert f"| {name} |" in out.stdout, name
+        assert "files mapped on first visit" in out.stdout
+        report = next((ROOT / "realtest" / "results").iterdir()) / "results.json"
+        rows = json.loads(report.read_text(encoding="utf-8"))["rows"]
+        assert all("answer" in r for r in rows)  # every method was answered by the (fake) model
+    finally:
+        srv.shutdown()
+        shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)

@@ -76,11 +76,17 @@ Every node in the map advertises, about everything beneath it:
 | Access list | union of its children's permissions | never contacting branches the caller can't see |
 | Learned questions | questions answered through it (`feedback()`) | learning how people actually phrase things |
 
-The map doesn't stop at the file. Inside each file it walks the headings to the
-right section, and optionally **section cards** written once by your local model
-(`python -m mapnet.cards FOLDER`) describe each section in the words people
-actually use, so "why is my namespace stuck deleting?" finds a page about
-*finalizers*. Cards guide routing only; they are never shown to the answering model.
+The map doesn't stop at the file. Like DNS, resolution goes from general to
+specific: the folder map gets you to the file, and the file's own map gets you to
+the passage. Each file is mapped **the first time a question arrives at it**: the
+local model writes a short card per section, what it covers and the questions
+people would ask in their own words, so "why is my namespace stuck deleting?"
+lands on a page about *finalizers*. The map is cached like a DNS answer: revisits
+are instant, a changed file is remapped on its next visit, and the cards flow up
+into the folder map so the file is easier to find from then on. Files the lookup
+touched but didn't open are mapped in the background. Cards guide routing only;
+they are never shown to the answering model. (To map a whole folder in advance:
+`python -m mapnet.cards FOLDER`.)
 
 ### Agent notes, and why they're safe
 

@@ -34,7 +34,9 @@ def main():
     ap.add_argument("--role", default="employee", help="comma-separated roles for permissions")
     ap.add_argument("--no-model", action="store_true", help="skip the LLM, show best passage")
     ap.add_argument("--notes", default=".mapnet-notes.json", help="where agent notes are kept")
-    ap.add_argument("--cards", help="card store built with `python -m mapnet.cards FOLDER`")
+    ap.add_argument("--cards", default=".mapnet-cards", help="where file maps (section cards) are kept")
+    ap.add_argument("--no-map-files", action="store_true",
+                    help="don't map files on first visit (use headings only)")
     args = ap.parse_args()
 
     if args.no_model:
@@ -48,11 +50,20 @@ def main():
             reader = ExtractiveReader()
 
     t0 = time.perf_counter()
-    a = Assistant(args.folder, reader=reader, notes_path=args.notes,
-                  cards=CardStore(args.cards) if args.cards else None)
+    def on_mapped(rel, n, secs, where):
+        if where == "background":
+            print(f"\n{GREEN}[map] mapped {rel} in the background: {n} sections ({secs:.0f}s){RESET}\n> ",
+                  end="", flush=True)
+
+    mapper = reader if isinstance(reader, OllamaReader) and not args.no_map_files else None
+    a = Assistant(args.folder, reader=reader, notes_path=args.notes, cards=CardStore(args.cards),
+                  map_files_with=mapper, on_mapped=on_mapped)
     n_src = len(a.map.sources())
     print(f"{BOLD}MapNet{RESET} mapped {n_src} files ({a.map.root.n_docs} passages) "
-          f"in {time.perf_counter() - t0:.1f}s. Model: {reader.model}. Watching for changes.\n")
+          f"in {time.perf_counter() - t0:.1f}s. Model: {reader.model}. Watching for changes.")
+    print(("Files are mapped section by section the first time a question reaches them "
+           "(the first visit takes a few seconds longer).\n") if mapper else
+          "Files are navigated by their headings (no model to map them).\n")
 
     def on_change(kind, rel, secs):
         print(f"\n{GREEN}[map] {kind}: {rel} ({secs * 1000:.0f} ms){RESET}\n> ", end="", flush=True)
@@ -89,6 +100,8 @@ def main():
         t = a.ask(q, roles=roles, stream=lambda s: print(s, end="", flush=True))
         print(RESET)
         how = f"note #{t.note_used}" if t.via == "note" else "map"
+        if t.mapped:
+            how += " | mapped " + ", ".join(f"{p.split('/')[-1]} ({s:.0f}s)" for p, s in t.mapped) + " on arrival"
         route = " -> ".join(", ".join(level) for level in t.route) if t.via != "note" else "straight to file"
         print(f"{DIM}via {how} | {route} | opened {t.files_opened} of {n_src} files | "
               f"lookup {t.retrieve_ms:.0f} ms, answer {t.answer_s:.1f}s"

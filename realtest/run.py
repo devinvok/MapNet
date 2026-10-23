@@ -42,7 +42,7 @@ from mapnet.llm import ExtractiveReader, OllamaReader  # noqa: E402
 from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
-from realtest.retrievers import EmbedAll, KeywordAll, MapEmbed, MapRoute, Shared  # noqa: E402
+from realtest.retrievers import EmbedAll, KeywordAll, MapEmbed, MapLazy, MapRoute, Shared  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -150,7 +150,9 @@ def main():
     ap.add_argument("--only", help="use only these top-level folders, for every method "
                     "(e.g. concepts,tasks,tutorials,setup)")
     ap.add_argument("--cards", help="card store from `python -m mapnet.cards` (default: <data>/cards)")
-    ap.add_argument("--answer-with", default="keyword-all,embed-all,map,map+sections,map+cards,map+embed",
+    ap.add_argument("--no-lazy", action="store_true", help="skip map+lazy-cards (needs the model, adds time)")
+    ap.add_argument("--answer-with",
+                    default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+cards,map+embed",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -235,6 +237,17 @@ def main():
     else:
         log(f"  cards: none found in {store.dir} (build them with: python -m mapnet.cards "
             f"{corpus} --store {store.dir})")
+    lazy = None
+    if have_reader and not args.no_lazy:
+        lazy_dir = data / "work" / "lazy-cards"  # starts empty every run
+        if lazy_dir.exists():
+            shutil.rmtree(lazy_dir)
+        lazy = MapLazy(Shared(work, cards=CardStore(lazy_dir)), CardStore(lazy_dir), reader)
+        retrievers.append(lazy)
+        log("  map+lazy-cards: starts with no cards; each file is mapped the first time a "
+            "question reaches it")
+    elif not have_reader:
+        log("  map+lazy-cards: skipped (needs the reader model)")
     retrievers.append(MapEmbed(shared, embed_all))
     names = [r.name for r in retrievers]
 
@@ -263,6 +276,10 @@ def main():
         ingest["map + keyword index"] = time.perf_counter() - t0
         new = [(d, t) for d, t in shared.chunks() if d.split("#")[0] in set(held)]
         ingest["embedding index"] = embed_all.add(new)
+        if lazy is not None:
+            t0 = time.perf_counter()
+            lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited
+            ingest["map + lazy cards (mapped later, on first visit)"] = time.perf_counter() - t0
         if shared_cards is not None:
             t0 = time.perf_counter()
             shared_cards.fm.sync()
@@ -291,6 +308,10 @@ def main():
           f"- Build time: map {meta['build_map_s']}s, embeddings {meta['build_embed_s']}s",
           *([f"- Cards: {card_info[0]:,} of {n_files:,} files carded, "
              f"{card_info[1] / 60:.0f} min of model time"] if card_info else []),
+          *([f"- Lazy cards: {lazy.lazy.files} files mapped on first visit during the test, "
+             f"{lazy.lazy.seconds / 60:.1f} min of model time "
+             f"({lazy.lazy.seconds / max(lazy.lazy.files, 1):.0f} s per first visit, included in "
+             f"map+lazy-cards lookup times)"] if lazy else []),
           *(f"- Absorbing {len(held)} new files: {k} {v * 1000:.0f} ms" for k, v in ingest.items()),
           ""]
     summaries = {}
@@ -309,7 +330,7 @@ def main():
     (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1),
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
-    log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0)]))
+    log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
     log(f"Full report: {out / 'report.md'}")

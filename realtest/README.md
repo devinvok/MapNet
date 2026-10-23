@@ -13,7 +13,8 @@ Every method sees exactly the same passages of the same files.
 | `embed-all` | Embedding search over every passage with a local embedding model: the standard modern RAG setup, and the baseline to beat |
 | `map` | MapNet: walk the folder map, search only the files it routes to |
 | `map+sections` | ...then walk each file's own map (its headings) to the right section |
-| `map+cards` | ...with section cards written by your local model guiding both walks (only if you've built cards, see below) |
+| `map+lazy-cards` | ...where each file is mapped by your local model **the first time a question arrives at it**, starting from no cards at all. DNS style: the folder map resolves the file, the file's own map resolves the passage, and the answer is cached. First-visit time is counted in its lookup time |
+| `map+cards` | ...with every file mapped in advance (only if you've built cards, see below) |
 | `map+embed` | MapNet routes to a wider set of files, embeddings rank the passages inside them |
 
 For each it measures: whether the right file is among the passages handed to the
@@ -63,7 +64,14 @@ Apple silicon. These are estimates; your report records the real times.
 The report lands in `realtest/results/<timestamp>/report.md`, with every
 question, retrieved file and answer in `results.json` next to it.
 
-## Section cards (the overnight step)
+## Section cards
+
+`map+lazy-cards` needs no preparation: it maps files as questions reach them, so
+it runs as part of the normal test (expect a few extra minutes for the first
+visits; skip it with `--no-lazy`). The report says how many files were mapped and
+how long a first visit took.
+
+### Mapping everything in advance (optional, overnight)
 
 A file has its own map in its headings, and `map+sections` walks it. But people
 ask in words the docs never use ("why is my namespace stuck deleting?" is answered

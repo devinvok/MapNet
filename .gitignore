@@ -20,3 +20,4 @@ compare-results.json
 realtest/data/
 realtest/results/
 .cache/
+.mapnet-cards/
