@@ -39,6 +39,12 @@ from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import EmbedAll, KeywordAll, MapEmbed, MapRoute, Shared  # noqa: E402
 
+for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 HERE = Path(__file__).resolve().parent
 P = namedtuple("P", "doc_id text")
 
@@ -93,7 +99,7 @@ def table(summary, title):
              "| Method | Found in top-k | MRR | Scanned per question | Lookup (median) | Answer right |",
              "|---|---|---|---|---|---|"]
     for name, s in summary.items():
-        ans = f"{s['answered']:.0%} ({s['n_judged']})" if s["answered"] is not None else "—"
+        ans = f"{s['answered']:.0%} ({s['n_judged']})" if s["answered"] is not None else "n/a"
         lines.append(f"| {name} | {s['found']:.0%} ({s['n']}) | {s['mrr']:.2f} | "
                      f"{s['scanned']:,.0f} | {s['ms']:.0f} ms | {ans} |")
     return "\n".join(lines) + "\n"
@@ -122,7 +128,7 @@ def main():
     else:
         corpus = Path(args.corpus).expanduser().resolve()
         qfile = Path(args.questions) if args.questions else None
-    items = json.loads(qfile.read_text()) if qfile else []
+    items = json.loads(qfile.read_text(encoding="utf-8")) if qfile else []
     if args.limit:
         items = items[: args.limit]
 
@@ -227,8 +233,9 @@ def main():
         miss = [r for r in rows if r["retriever"] == name and not r["found"] and not r["generated"]]
         md.append(f"**{name}** ({len(miss)}): " + "; ".join(f"“{r['q']}” → {r['files'][:2]}" for r in miss)
                   + "\n" if miss else f"**{name}**: none\n")
-    (out / "report.md").write_text("\n".join(md))
-    (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1))
+    (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1),
+                                      encoding="utf-8")
+    (out / "report.md").write_text("\n".join(md), encoding="utf-8")
     log("\n" + "\n".join(md[: 6 + len(ingest)]))
     for title, s in summaries.items():
         log(table(s, title))

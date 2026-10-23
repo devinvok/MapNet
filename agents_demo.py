@@ -14,11 +14,18 @@ a note pointing into a restricted folder, and a note whose file is deleted.
     python agents_demo.py
 """
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
 from mapnet.assistant import Assistant
 from mapnet.llm import ExtractiveReader
+
+for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
 
 HERE = Path(__file__).parent
 TASKS = [  # (agent A's wording, agent B's wording, correct file)

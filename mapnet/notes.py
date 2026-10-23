@@ -131,12 +131,12 @@ class NoteBoard:
 
     # ----------------------------------------------------------- persistence
     def save(self, path):
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump([asdict(n) for n in self.notes.values()], f, indent=1)
 
     def load(self, path):
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 items = json.load(f)
         except FileNotFoundError:
             return

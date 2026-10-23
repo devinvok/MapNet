@@ -77,7 +77,7 @@ def test_access_file_restricts_folder(assistant):
 
 
 def test_question_set_retrieval(assistant):
-    qs = json.loads((EXAMPLES / "questions.json").read_text())
+    qs = json.loads((EXAMPLES / "questions.json").read_text(encoding="utf-8"))
     found = sum(q["file"] in assistant.ask(q["q"], roles=q.get("roles", ["employee"])).sources
                 for q in qs)
     assert found == len(qs)

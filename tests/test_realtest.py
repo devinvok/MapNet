@@ -30,7 +30,7 @@ def test_all_retrievers_run(tmp_path):
     shutil.copytree(ROOT / "examples" / "company", folder)
     shared = Shared(folder)
     e = EmbedAll(shared, LsaEmbedder(dims=16), log=lambda *a: None)
-    qs = json.loads((ROOT / "examples" / "questions.json").read_text())
+    qs = json.loads((ROOT / "examples" / "questions.json").read_text(encoding="utf-8"))
     for r in [KeywordAll(shared), e, MapRoute(shared), MapEmbed(shared, e)]:
         found = sum(q["file"] in [f for f, _, _ in r.search(q["q"], 4)[0]] for q in qs[:10])
         assert found >= 7, r.name

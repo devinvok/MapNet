@@ -92,7 +92,7 @@ class FolderMap:
         for part in (Path(),) + tuple(Path(*rel_dir.parts[: i + 1]) for i in range(len(rel_dir.parts))):
             f = self.root / part / ".access"
             if f.exists():
-                roles = {r.strip() for r in f.read_text().replace("\n", ",").split(",") if r.strip()}
+                roles = {r.strip() for r in f.read_text(encoding="utf-8").replace("\n", ",").split(",") if r.strip()}
                 acl = roles or acl
         return acl
 

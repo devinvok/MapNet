@@ -6,9 +6,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +21,5 @@ jobs:
       - run: pytest -q
       - run: python agents_demo.py
       - run: python compare.py
+      # end-to-end real-test pipeline on the sample company, no models needed
+      - run: python -m realtest.run --corpus examples/company --questions realtest/questions/sample-company.json --retrieval-only --data realtest/data

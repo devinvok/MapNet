@@ -18,6 +18,7 @@ Setups:
 Note: the cloud setups send your excerpts / files to the cloud provider.
 """
 import argparse
+import sys
 import json
 import shutil
 import tempfile
@@ -27,6 +28,12 @@ from pathlib import Path
 from mapnet.assistant import Assistant
 from mapnet.folder import read_file
 from mapnet.llm import AnthropicReader, ExtractiveReader, OllamaReader, build_prompt
+
+for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
 
 HERE = Path(__file__).parent
 LIVE_QUESTIONS = [
@@ -98,7 +105,7 @@ def main():
 
     tmp = Path(tempfile.mkdtemp()) / "company"
     shutil.copytree(HERE / "examples" / "company", tmp)
-    questions = json.loads((HERE / "examples" / "questions.json").read_text())
+    questions = json.loads((HERE / "examples" / "questions.json").read_text(encoding="utf-8"))
 
     setups = []
     local = OllamaReader(args.model)
@@ -135,7 +142,7 @@ def main():
           f"{len(LIVE_QUESTIONS)} of them about files added seconds earlier)")
     for name, rows in results.items():
         print("  " + summarize(name, rows, args.price_in, args.price_out or 0))
-    Path(args.out).write_text(json.dumps(results, indent=1))
+    Path(args.out).write_text(json.dumps(results, indent=1), encoding="utf-8")
     print(f"\nPer-question answers saved to {args.out}")
     shutil.rmtree(tmp.parent)
 

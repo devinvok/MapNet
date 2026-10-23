@@ -83,7 +83,7 @@ def main():
                       f"comparisons {r['cost']:>7,}  {r['latency_ms']:>6} ms", flush=True)
                 rows.append(dict(systems_per_topic=size, sources=len(sources), docs=n_docs,
                                  style=style, method=name, **r))
-    with open(Path(__file__).parent / "results.json", "w") as f:
+    with open(Path(__file__).parent / "results.json", "w", encoding="utf-8") as f:
         json.dump(rows, f, indent=1)
     print("\nwrote results.json")
 

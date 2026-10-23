@@ -1,0 +1,12 @@
+[
+ {"q": "How many weeks of paid parental leave do birth parents get?", "files": ["hr/parental-leave-policy.md"], "expect": ["20"]},
+ {"q": "How much leave do adoptive parents get?", "files": ["hr/parental-leave-policy.md"], "expect": ["12"]},
+ {"q": "What is the hotel limit per night in London?", "files": ["finance/travel-expense-policy.md"], "expect": ["260"]},
+ {"q": "What is the daily meal allowance when travelling?", "files": ["finance/travel-expense-policy.md"], "expect": ["75"], "fresh": true},
+ {"q": "How long do I have to submit an expense claim?", "files": ["finance/travel-expense-policy.md"], "expect": ["30"]},
+ {"q": "What are the payment terms with Kalmar Metals?", "files": ["finance/vendors/kalmar-metals.md"], "expect": ["45"]},
+ {"q": "Why is invoice KM-88412 on hold?", "files": ["finance/vendors/kalmar-metals.md"], "expect": ["inspection"]},
+ {"q": "Was Sales over or under budget in Q3 and why?", "files": ["finance/budget-q3-2026.csv"], "expect": ["over", "trade show"]},
+ {"q": "When does the on-call rotation change?", "files": ["engineering/oncall-runbook.md"], "expect": ["monday"]},
+ {"q": "How quickly must a postmortem be published?", "files": ["engineering/oncall-runbook.md"], "expect": ["5 business days"]}
+]

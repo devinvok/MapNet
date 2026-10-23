@@ -14,6 +14,12 @@ import time
 from mapnet.assistant import Assistant
 from mapnet.llm import ExtractiveReader, OllamaReader
 
+for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 DIM, BOLD, GREEN, YELLOW, RESET = "\033[2m", "\033[1m", "\033[32m", "\033[33m", "\033[0m"
 if not sys.stdout.isatty():
     DIM = BOLD = GREEN = YELLOW = RESET = ""
