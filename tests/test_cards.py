@@ -205,7 +205,7 @@ def test_full_real_test_with_fake_models(tmp_path):
              "--data", str(tmp_path / "data")],
             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600, env=env)
         assert out.returncode == 0, out.stderr[-2000:]
-        for name in ["keyword-all", "embed-all", "map+sections", "map+lazy-cards", "map+embed"]:
+        for name in ["keyword-all", "embed-all", "map+sections", "map+lazy-cards", "map+meaning", "map+embed"]:
             assert f"| {name} |" in out.stdout, name
         assert "files mapped on first visit" in out.stdout
         report = next((ROOT / "realtest" / "results").iterdir()) / "results.json"

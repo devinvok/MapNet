@@ -86,7 +86,11 @@ are instant, a changed file is remapped on its next visit, and the cards flow up
 into the folder map so the file is easier to find from then on. Files the lookup
 touched but didn't open are mapped in the background, and every file gets a
 one-line description at the folder level while the computer is idle, so the
-router can find files no one has visited yet. Cards guide routing only;
+router can find files no one has visited yet. With `--meaning`, the map is also
+walked by meaning (a small local embedding model): it embeds the map, one vector
+per file and, on arrival, per section, not every passage, and it only ever adds
+candidates to the word router's, so a wrong guess can't push out a right one.
+Cards guide routing only;
 they are never shown to the answering model. (To map a whole folder in advance:
 `python -m mapnet.cards FOLDER`.)
 

@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT))
 from mapnet.cards import CardStore, content_key, make_cards  # noqa: E402
 from mapnet.embed import LsaEmbedder, OllamaEmbedder  # noqa: E402
 from mapnet.folder import read_file  # noqa: E402
+from mapnet.meaning import MeaningRouter  # noqa: E402
 from mapnet.llm import ExtractiveReader, OllamaReader  # noqa: E402
 from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
@@ -154,10 +155,11 @@ def main():
     ap.add_argument("--only", help="use only these top-level folders, for every method "
                     "(e.g. concepts,tasks,tutorials,setup)")
     ap.add_argument("--cards", help="card store from `python -m mapnet.cards` (default: <data>/cards)")
-    ap.add_argument("--no-lazy", action="store_true", help="skip map+lazy-cards (needs the model, adds time)")
+    ap.add_argument("--no-lazy", action="store_true", help="skip the methods that map files on arrival")
+    ap.add_argument("--skip", default="", help="comma-separated methods to leave out (saves time)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+cards,map+embed",
+                            "map+meaning,map+cards,map+embed",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -273,7 +275,28 @@ def main():
         log(f"  map+file-cards: skipped, no file descriptions in {store.dir}. Build them with:\n"
             f"    python -m mapnet.cards {corpus} --store {store.dir} --files-only"
             + (f" --only {args.only}" if args.only else ""))
+    # the full chain walked by meaning: embeds the map (files, sections), not the passages
+    meaning = None
+    if "map+meaning" not in args.skip:
+        m_dir = data / "work" / "meaning-cards"  # section cards start empty every run
+        if m_dir.exists():
+            shutil.rmtree(m_dir)
+        m_store = (CombinedCards(HideCards(store, held_texts), CardStore(m_dir)) if store.count_files()
+                   else CardStore(m_dir))
+        m_shared = Shared(work, cards=m_store)
+        router = MeaningRouter(m_shared.map, emb)
+        t0 = time.perf_counter()
+        n_vec, _ = router.build(log)
+        meaning_build = time.perf_counter() - t0
+        meaning = MapLazy(m_shared, m_store, reader if (have_reader and not args.no_lazy) else None,
+                          name="map+meaning", route_weight=0.3, router=router)
+        log(f"  map+meaning: {n_vec:,} map vectors (vs {n_chunks:,} passages) in {meaning_build:.1f}s"
+            f"{'; file descriptions' if store.count_files() else ''}"
+            f"{'; sections mapped on arrival' if meaning.lazy else ''}")
+        retrievers.append(meaning)
     retrievers.append(MapEmbed(shared, embed_all))
+    skip = {x.strip() for x in args.skip.split(",") if x.strip()}
+    retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
 
     if args.generate:
@@ -305,6 +328,13 @@ def main():
             t0 = time.perf_counter()
             lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited
             ingest["map + lazy cards (mapped later, on first visit)"] = time.perf_counter() - t0
+        if meaning is not None:
+            t0 = time.perf_counter()
+            meaning.s.fm.sync()
+            if meaning.lazy and store.count_files():
+                meaning.lazy.describe_now(held)
+            meaning.router.build()  # embed the map entries of the new files
+            ingest["map + meaning vectors for the new files"] = time.perf_counter() - t0
         if chain is not None:
             t0 = time.perf_counter()
             chain.s.fm.sync()
@@ -342,6 +372,10 @@ def main():
              f"{file_info[1] / 60:.0f} min of model time, built in advance"] if file_info else []),
           *([f"- map+file-cards: {chain.lazy.files} files mapped on first visit, "
              f"{chain.lazy.seconds / 60:.1f} min of model time"] if chain else []),
+          *([f"- map+meaning: {meaning.router.vectors:,} map vectors embedded in total "
+             f"(vs {n_chunks:,} passages for embed-all), {meaning.router.seconds:.0f}s"
+             + (f"; {meaning.lazy.files} files mapped on first visit" if meaning.lazy else "")]
+            if meaning else []),
           *([f"- Lazy cards: {lazy.lazy.files} files mapped on first visit during the test, "
              f"{lazy.lazy.seconds / 60:.1f} min of model time "
              f"({lazy.lazy.seconds / max(lazy.lazy.files, 1):.0f} s per first visit, included in "
@@ -365,7 +399,7 @@ def main():
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
     log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)
-                            + (2 if chain else 0)]))
+                            + (2 if chain else 0) + (1 if meaning else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
     log(f"Full report: {out / 'report.md'}")

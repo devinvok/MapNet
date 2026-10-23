@@ -7,6 +7,8 @@ The contenders. All of them see exactly the same chunks of the same files.
   map+sections  ...and inside each file, walk its headings to the right section
   map+lazy-cards  ...where each file is mapped by the model the first time a question reaches it
   map+file-cards  ...plus a one-line description of every file at the folder level: the full chain
+  map+meaning     the full chain, walked by meaning (an embedding of the map, not of the
+                  passages) as well as by words
   map+cards     ...with agent-written section cards for every file, made in advance
   map+embed     MapNet routing to a wider set of files, then embedding ranking inside them
 """
@@ -134,19 +136,20 @@ class MapLazy:
     gets better as questions come in, and the cost of every first visit is
     counted in this method's lookup time."""
 
-    def __init__(self, shared, store, reader, name="map+lazy-cards", route_weight=0.0):
+    def __init__(self, shared, store, reader, name="map+lazy-cards", route_weight=0.0, router=None):
         from mapnet.cards import LazyCarder
         self.s, self.name = shared, name
         shared.map.route_weight = route_weight  # file-level decisions carry down to passages
-        self.lazy = LazyCarder(shared.fm, store, reader, sync_top=1, background=False)
+        self.router = router or shared.map  # MapNet itself, or a MeaningRouter over it
+        self.lazy = LazyCarder(shared.fm, store, reader, sync_top=1, background=False) if reader else None
 
     def search(self, q, k):
         m = self.s.map
         old, m.section_weight = m.section_weight, 1.0
         try:
-            r = m.search(q, k=k, min_score=0.12)
-            if self.lazy.visit(r.sources_searched):
-                again = m.search_in(q, r.sources_searched, k=k)
+            r = self.router.search(q, k=k, min_score=0.12)
+            if self.lazy and self.lazy.visit(r.sources_searched):
+                again = self.router.search_in(q, r.sources_searched, k=k)
                 again.cost += r.cost
                 r = again
         finally:

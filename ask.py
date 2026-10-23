@@ -4,6 +4,7 @@ The folder is watched: add, edit or delete files and the next question sees it.
 
     python ask.py examples/company
     python ask.py ~/Documents/work --role hr --model llama3.2:3b
+    python ask.py ~/Documents/work --meaning   # also route by meaning (needs: ollama pull nomic-embed-text)
     python ask.py ~/Documents/work --cards .mapnet-cards   # after: python -m mapnet.cards ~/Documents/work
 
 Commands inside: /map  /notes  /role <names>  /quit
@@ -35,6 +36,9 @@ def main():
     ap.add_argument("--no-model", action="store_true", help="skip the LLM, show best passage")
     ap.add_argument("--notes", default=".mapnet-notes.json", help="where agent notes are kept")
     ap.add_argument("--cards", default=".mapnet-cards", help="where file maps (section cards) are kept")
+    ap.add_argument("--meaning", action="store_true",
+                    help="also walk the map by meaning, with a local embedding model "
+                         "(default nomic-embed-text; set MAPNET_EMBED_MODEL to change)")
     ap.add_argument("--no-map-files", action="store_true",
                     help="don't map files on first visit (use headings only)")
     args = ap.parse_args()
@@ -64,8 +68,18 @@ def main():
                   end="", flush=True)
 
     mapper = reader if isinstance(reader, OllamaReader) and not args.no_map_files else None
+    embedder = None
+    if args.meaning:
+        from mapnet.embed import OllamaEmbedder
+        embedder = OllamaEmbedder(cache_dir=".cache/embeddings")
+        if embedder.available():
+            print(f"Embedding the map with {embedder.model} (one vector per file; cached after the first run)...")
+        else:
+            print(f"{YELLOW}Embedding model '{embedder.model}' not found; continuing by words only. "
+                  f"Fix: ollama pull {embedder.model}{RESET}")
+            embedder = None
     a = Assistant(args.folder, reader=reader, notes_path=args.notes, cards=CardStore(args.cards),
-                  map_files_with=mapper, on_mapped=on_mapped)
+                  map_files_with=mapper, on_mapped=on_mapped, embedder=embedder)
     n_src = len(a.map.sources())
     print(f"{BOLD}MapNet{RESET} mapped {n_src} files ({a.map.root.n_docs} passages) "
           f"in {time.perf_counter() - t0:.1f}s. Model: {reader.model}. Watching for changes.")

@@ -15,6 +15,7 @@ Every method sees exactly the same passages of the same files.
 | `map+sections` | ...then walk each file's own map (its headings) to the right section |
 | `map+lazy-cards` | ...where each file is mapped by your local model **the first time a question arrives at it**, starting from no cards at all. DNS style: the folder map resolves the file, the file's own map resolves the passage, and the answer is cached. First-visit time is counted in its lookup time |
 | `map+file-cards` | **The full chain.** Every file also has a one-line description at the folder level, written in advance, so the router can find files nobody has visited yet; sections are mapped on arrival as above, and the file-level decision carries down into passage ranking. Only if you've built file descriptions, see below |
+| `map+meaning` | The chain above, walked by **meaning** as well as words. It embeds the *map*, not the passages: one vector per file up front (its path, description and outline), and a file's sections only when a question first arrives there. At each level the word router's best branches are kept and meaning's best are added, and one of the k passages goes to meaning's first choice, so a weak meaning signal costs little and a good one fixes wrong turns |
 | `map+cards` | ...with every file's sections mapped in advance (only if you've built them, see below) |
 | `map+embed` | MapNet routes to a wider set of files, embeddings rank the passages inside them |
 
@@ -158,6 +159,22 @@ contact with real data. If the map falls clearly behind `embed-all`, look at the
 "Misses" section of the report: it shows where routing took a wrong turn, which
 is the thing to fix next (for example, a fallback to wider search on low
 confidence, or an embedding-based router).
+
+## How the meaning router behaves (sanity check, no real embedding model)
+
+The router was checked on the 35 hand-written questions with "meaning" signals of
+known quality, since no real embedding model was available where it was built:
+
+| Meaning signal | Right file found | Answer in passages |
+|---|---|---|
+| none (map+sections) | 25/35 | 24/35 |
+| pure noise | 25/35 | 23/35 |
+| weak stand-in (LSA) | 25/35 | 23/35 |
+| perfect (knows the answer files) | **35/35** | **28/35** |
+
+So the design costs at most about one question when meaning is useless and
+fixes every wrong turn when it's perfect. A real model (`nomic-embed-text`) will
+land in between; the real test measures where.
 
 ## Second real run: hand-written folders (469 files), sections and mapping on arrival
 

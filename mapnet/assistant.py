@@ -34,9 +34,10 @@ class Turn:
 
 class Assistant:
     def __init__(self, folder, reader=None, notes_path=None, confident=0.12, k=4, cards=None,
-                 map_files_with=None, on_mapped=None, background=True):
+                 map_files_with=None, on_mapped=None, background=True, embedder=None):
         """cards: a CardStore. map_files_with: a model (OllamaReader) that maps each
-        file the first time a lookup arrives there; its cards go into `cards`."""
+        file the first time a lookup arrives there; its cards go into `cards`.
+        embedder: an embedding model (OllamaEmbedder): also walk the map by meaning."""
         # walk folders, then the headings (and agent cards, if any) inside each file
         self.fm = FolderMap(folder, mapnet=MapNet(section_weight=1.0, route_weight=0.3), cards=cards)
         self.fm.sync()
@@ -55,6 +56,11 @@ class Assistant:
                                    background=background)
             if background:  # fill in the folder level of the map while idle
                 self.lazy.describe_missing()
+        self.router = self.map
+        if embedder is not None:
+            from .meaning import MeaningRouter
+            self.router = MeaningRouter(self.map, embedder)
+            self.router.build()
         self.confident = confident  # top excerpt score that counts as "found it"
         self.k = k
 
@@ -67,7 +73,7 @@ class Assistant:
                 for note, _ in self.notes.lookup(question, roles)[:2]:
                     if self.lazy:
                         mapped += self.lazy.visit([note.target])
-                    r = self.map.search_in(question, [note.target], k=self.k, roles=roles)
+                    r = self.router.search_in(question, [note.target], k=self.k, roles=roles)
                     if r.hits and r.hits[0].score >= self.confident:
                         self.notes.confirm(note)
                         via, res, used = "note", r, note.id
@@ -76,13 +82,13 @@ class Assistant:
             if res is None:
                 if self.lazy and self.lazy._q.qsize() == 0:
                     self.lazy.describe_missing()  # new files since last time
-                res = self.map.search(question, k=self.k, roles=roles, min_score=self.confident)
+                res = self.router.search(question, k=self.k, roles=roles, min_score=self.confident)
                 if self.lazy and res.sources_searched:
                     # arrived at the files: map the top one now, then walk its map
                     new = self.lazy.visit(res.sources_searched)
                     if new:
                         mapped += new
-                        again = self.map.search_in(question, res.sources_searched, k=self.k, roles=roles)
+                        again = self.router.search_in(question, res.sources_searched, k=self.k, roles=roles)
                         again.trace, again.cost = res.trace, res.cost + again.cost
                         again.escalated = res.escalated
                         res = again
