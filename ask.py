@@ -4,6 +4,7 @@ The folder is watched: add, edit or delete files and the next question sees it.
 
     python ask.py examples/company
     python ask.py ~/Documents/work --role hr --model llama3.2:3b
+    python ask.py ~/Documents/work --cards .mapnet-cards   # after: python -m mapnet.cards ~/Documents/work
 
 Commands inside: /map  /notes  /role <names>  /quit
 """
@@ -12,6 +13,7 @@ import sys
 import time
 
 from mapnet.assistant import Assistant
+from mapnet.cards import CardStore
 from mapnet.llm import ExtractiveReader, OllamaReader
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
@@ -32,6 +34,7 @@ def main():
     ap.add_argument("--role", default="employee", help="comma-separated roles for permissions")
     ap.add_argument("--no-model", action="store_true", help="skip the LLM, show best passage")
     ap.add_argument("--notes", default=".mapnet-notes.json", help="where agent notes are kept")
+    ap.add_argument("--cards", help="card store built with `python -m mapnet.cards FOLDER`")
     args = ap.parse_args()
 
     if args.no_model:
@@ -45,7 +48,8 @@ def main():
             reader = ExtractiveReader()
 
     t0 = time.perf_counter()
-    a = Assistant(args.folder, reader=reader, notes_path=args.notes)
+    a = Assistant(args.folder, reader=reader, notes_path=args.notes,
+                  cards=CardStore(args.cards) if args.cards else None)
     n_src = len(a.map.sources())
     print(f"{BOLD}MapNet{RESET} mapped {n_src} files ({a.map.root.n_docs} passages) "
           f"in {time.perf_counter() - t0:.1f}s. Model: {reader.model}. Watching for changes.\n")

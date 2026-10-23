@@ -11,13 +11,16 @@ Every method sees exactly the same passages of the same files.
 |---|---|
 | `keyword-all` | Keyword search over every passage (classic search index) |
 | `embed-all` | Embedding search over every passage with a local embedding model: the standard modern RAG setup, and the baseline to beat |
-| `map` | MapNet: walk the map, search only the files it routes to |
+| `map` | MapNet: walk the folder map, search only the files it routes to |
+| `map+sections` | ...then walk each file's own map (its headings) to the right section |
+| `map+cards` | ...with section cards written by your local model guiding both walks (only if you've built cards, see below) |
 | `map+embed` | MapNet routes to a wider set of files, embeddings rank the passages inside them |
 
 For each it measures: whether the right file is among the passages handed to the
-model, how high it ranks, how much work the search did, how long it took, whether
-the local model's final answer is right, and how fast newly added files become
-answerable.
+model, how high it ranks, **whether those passages actually contain the answer**
+(checked by keyword, no model needed), how much work the search did, how long it
+took, whether the local model's final answer is right, and how fast newly added
+files become answerable.
 
 ## The data
 
@@ -60,6 +63,35 @@ Apple silicon. These are estimates; your report records the real times.
 The report lands in `realtest/results/<timestamp>/report.md`, with every
 question, retrieved file and answer in `results.json` next to it.
 
+## Section cards (the overnight step)
+
+A file has its own map in its headings, and `map+sections` walks it. But people
+ask in words the docs never use ("why is my namespace stuck deleting?" is answered
+by a page about *finalizers*). Cards close that gap: your local model reads each
+section once and writes a short card, what it covers and the questions a person
+would ask, in plain words. The map routes by the cards; the cards are never shown
+to the answering model.
+
+Writing cards takes one model call per few sections. For the whole Kubernetes
+docs that's about 2,950 calls (most of them for the generated API reference), so
+the test supports running on the hand-written folders only: about 950 calls,
+roughly an overnight job on a laptop CPU. Every method then runs on the same
+smaller set, so the comparison stays fair.
+
+```bash
+# 1. time a sample (prints seconds per file and an estimate for the rest)
+python -m mapnet.cards realtest/data/k8s-docs --store realtest/data/cards --only concepts,tasks,tutorials,setup --limit 10
+
+# 2. the rest, overnight. Ctrl+C any time; rerunning continues where it stopped
+python -m mapnet.cards realtest/data/k8s-docs --store realtest/data/cards --only concepts,tasks,tutorials,setup
+
+# 3. the test, on the same folders
+python -m realtest.run --only concepts,tasks,tutorials,setup
+```
+
+Files used in the freshness test are treated as never carded: when they "arrive"
+in phase B, the model writes their cards on the spot, and that time is reported.
+
 ## Your own documents
 
 ```bash
@@ -97,6 +129,23 @@ contact with real data. If the map falls clearly behind `embed-all`, look at the
 "Misses" section of the report: it shows where routing took a wrong turn, which
 is the thing to fix next (for example, a fallback to wider search on low
 confidence, or an embedding-based router).
+
+## First real run (qwen2.5:3b + nomic-embed-text, Windows laptop)
+
+| Method | Right file found | Answer right | Scanned per question |
+|---|---|---|---|
+| keyword-all | 69% | 46% | 25,412 |
+| embed-all | **77%** | **77%** | 25,412 |
+| map | 74% | 51% | 284 |
+| map+embed | 74% | 66% | 635 |
+
+Building: map 17.6 s, embeddings 2,076 s (35 min). The map found the right file
+almost as often while reading 1% of the text, but the model answered much less
+often from its passages: they came from the right file but the wrong part of it.
+That is what `map+sections` and `map+cards` were built to fix. Without any model,
+the share of questions whose answer is actually in the passages went from 63%
+(`map`) to 71% (`map+sections`), and from 57% to 69% on the hand-written folders.
+The answer-quality numbers for the new methods need a run on your machine.
 
 ## What we already saw without any models
 

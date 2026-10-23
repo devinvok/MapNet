@@ -76,6 +76,12 @@ Every node in the map advertises, about everything beneath it:
 | Access list | union of its children's permissions | never contacting branches the caller can't see |
 | Learned questions | questions answered through it (`feedback()`) | learning how people actually phrase things |
 
+The map doesn't stop at the file. Inside each file it walks the headings to the
+right section, and optionally **section cards** written once by your local model
+(`python -m mapnet.cards FOLDER`) describe each section in the words people
+actually use, so "why is my namespace stuck deleting?" finds a page about
+*finalizers*. Cards guide routing only; they are never shown to the answering model.
+
 ### Agent notes, and why they're safe
 
 The idea came from a real failure mode: agents that discover a shared space and

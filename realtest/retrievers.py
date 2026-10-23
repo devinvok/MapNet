@@ -4,6 +4,8 @@ The contenders. All of them see exactly the same chunks of the same files.
   keyword-all   keyword search over every chunk (classic flat index)
   embed-all     embedding search over every chunk (the standard modern RAG baseline)
   map           MapNet routing: walk the map, search only the chosen files
+  map+sections  ...and inside each file, walk its headings to the right section
+  map+cards     ...with agent-written section cards guiding both walks
   map+embed     MapNet routing to a wider set of files, then embedding ranking inside them
 """
 from __future__ import annotations
@@ -18,9 +20,9 @@ from mapnet.folder import FolderMap
 class Shared:
     """One folder, chunked once; every retriever reads from this."""
 
-    def __init__(self, folder):
+    def __init__(self, folder, cards=None):
         t0 = time.perf_counter()
-        self.fm = FolderMap(folder)
+        self.fm = FolderMap(folder, cards=cards)
         self.fm.sync()
         self.map = self.fm.map
         self.build_s = time.perf_counter() - t0
@@ -47,13 +49,16 @@ class KeywordAll:
 
 
 class MapRoute:
-    name = "map"
-
-    def __init__(self, shared):
-        self.s = shared
+    def __init__(self, shared, name="map", sections=False):
+        self.s, self.name, self.sections = shared, name, sections
 
     def search(self, q, k):
-        r = self.s.map.search(q, k=k, min_score=0.12)
+        m = self.s.map
+        old, m.section_weight = m.section_weight, (1.0 if self.sections else 0.0)
+        try:
+            r = m.search(q, k=k, min_score=0.12)
+        finally:
+            m.section_weight = old
         return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost
 
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+from .core import MapNet
 from .folder import FolderMap
 from .llm import pick_reader
 from .notes import NoteBoard
@@ -31,8 +32,9 @@ class Turn:
 
 
 class Assistant:
-    def __init__(self, folder, reader=None, notes_path=None, confident=0.12, k=4):
-        self.fm = FolderMap(folder)
+    def __init__(self, folder, reader=None, notes_path=None, confident=0.12, k=4, cards=None):
+        # walk folders, then the headings (and agent cards, if any) inside each file
+        self.fm = FolderMap(folder, mapnet=MapNet(section_weight=1.0), cards=cards)
         self.fm.sync()
         self.map = self.fm.map
         self.notes = NoteBoard(self.map)

@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -50,31 +51,78 @@ def read_file(path: Path) -> str:
     return ""
 
 
+_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+_FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def chunk_with_sections(text: str, title: str, max_chars=700):
+    """Split on blank lines and pack paragraphs up to max_chars, like before,
+    and also record where in the file each chunk sits: its heading path
+    ("Pod Lifecycle > Container restarts") plus any headings inside it.
+    The file's own map, one level below the folder map.
+
+    Returns [(chunk_text, section_path, headings_text)]. Chunk text is exactly
+    what `chunk` returns, so embeddings computed earlier stay valid."""
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    stack: list[tuple[int, str]] = []  # (level, heading)
+    in_code = False
+    out, cur, cur_heads = [], "", []
+    cur_size: dict[str, int] = {}  # characters of the current chunk per section
+
+    def path():
+        return " > ".join(h for _, h in stack)
+
+    def flush():
+        nonlocal cur, cur_heads, cur_size
+        if cur:  # a chunk spanning two sections belongs to the one holding most of it
+            sec = max(cur_size, key=cur_size.get) if cur_size else ""
+            out.append((cur, sec, " > ".join(dict.fromkeys(cur_heads))))
+        cur, cur_heads, cur_size = "", [], {}
+
+    for p in paras:
+        sec_before = path()
+        heads = []
+        for line in p.split("\n"):
+            if _FENCE.match(line):
+                in_code = not in_code
+                continue
+            m = None if in_code else _HEADING.match(line)
+            if m:
+                level, h = len(m.group(1)), re.sub(r"\{#[^}]*\}|[`*_]", "", m.group(2)).strip()
+                while stack and stack[-1][0] >= level:
+                    stack.pop()
+                stack.append((level, h))
+                heads.append(path())
+        # a paragraph that opens with a heading belongs to that heading's section
+        sec = heads[0] if heads and _HEADING.match(p.split("\n", 1)[0]) else sec_before
+        while len(p) > max_chars:  # very long paragraph
+            out.append((p[:max_chars], sec, " > ".join(dict.fromkeys([sec] + heads))))
+            p = p[max_chars:]
+        if cur and len(cur) + len(p) > max_chars:
+            flush()
+        cur_size[sec] = cur_size.get(sec, 0) + len(p)
+        cur_heads += [sec] + heads
+        cur = f"{cur}\n\n{p}" if cur else p
+    flush()
+    if not out:
+        return [(f"[{title}]", "", "")]
+    return [(f"[{title}]\n{c}", s, h) for c, s, h in out]
+
+
 def chunk(text: str, title: str, max_chars=700) -> list[str]:
     """Split on blank lines, pack paragraphs up to max_chars. Every chunk is
     prefixed with the file title so it keeps its context."""
-    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
-    chunks, cur = [], ""
-    for p in paras:
-        while len(p) > max_chars:  # very long paragraph
-            chunks.append(p[:max_chars])
-            p = p[max_chars:]
-        if cur and len(cur) + len(p) > max_chars:
-            chunks.append(cur)
-            cur = ""
-        cur = f"{cur}\n\n{p}" if cur else p
-    if cur:
-        chunks.append(cur)
-    return [f"[{title}]\n{c}" for c in chunks] or [f"[{title}]"]
+    return [c for c, _, _ in chunk_with_sections(text, title, max_chars)]
 
 
 # --------------------------------------------------------------------------- #
 # Folder <-> map
 # --------------------------------------------------------------------------- #
 class FolderMap:
-    def __init__(self, root, mapnet: MapNet | None = None, on_change=None):
+    def __init__(self, root, mapnet: MapNet | None = None, on_change=None, cards=None):
         self.root = Path(root).resolve()
         self.map = mapnet or MapNet()
+        self.cards = cards  # optional CardStore: agent-written section cards, by file content
         self.lock = threading.RLock()
         self.seen: dict[str, tuple[float, int]] = {}  # rel path -> (mtime, size)
         self.on_change = on_change  # callback(kind, rel_path, seconds)
@@ -114,9 +162,15 @@ class FolderMap:
         rel_path = Path(rel)
         group = list(rel_path.parent.parts) or ["_top"]
         title = rel_path.as_posix()
-        chunks = chunk(text, title)
-        docs = [(f"{title}#{i}", c) for i, c in enumerate(chunks)]
-        self.map.register_source(rel_path.name, docs, path=group, acl=tuple(self._acl_for(rel_path.parent)))
+        parts = chunk_with_sections(text, title)
+        docs = [(f"{title}#{i}", c) for i, (c, _, _) in enumerate(parts)]
+        node = self.map.register_source(rel_path.name, docs, path=group,
+                                        acl=tuple(self._acl_for(rel_path.parent)),
+                                        sections=[(s, h) for _, s, h in parts])
+        if self.cards is not None:
+            cards = self.cards.get(text)
+            if cards:
+                self.map.set_cards(node, cards)
 
     def _unindex(self, rel: str):
         rel_path = Path(rel)

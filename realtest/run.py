@@ -10,6 +10,8 @@ What it measures, for every contender:
   found      the file that answers the question is among the k passages retrieved
   rank       reciprocal rank of the first right passage (MRR)
   scanned    passages/nodes scored per question (work done)
+  evidence   the passages handed to the model contain the answer (keyword check,
+             hand-written questions only; needs no model)
   answered   the local model's answer is right (keyword check, or a judge model
              for generated questions)
   fresh      same, for questions whose files were added AFTER the indexes were
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import statistics
 import sys
@@ -32,7 +35,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from mapnet.cards import CardStore, content_key, make_cards  # noqa: E402
 from mapnet.embed import LsaEmbedder, OllamaEmbedder  # noqa: E402
+from mapnet.folder import read_file  # noqa: E402
 from mapnet.llm import ExtractiveReader, OllamaReader  # noqa: E402
 from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
@@ -65,7 +70,8 @@ def evaluate(items, retrievers, k, reader, answer_with, model_judge):
             rank = next((i + 1 for i, f in enumerate(files) if f in gold), None)
             row = dict(q=item["q"], retriever=r.name, found=rank is not None,
                        rr=1 / rank if rank else 0.0, scanned=scanned, ms=ms, files=files[:3],
-                       generated=item.get("generated", False), fresh=item.get("fresh", False))
+                       generated=item.get("generated", False), fresh=item.get("fresh", False),
+                       evidence=evidence(hits, item))
             if reader and r.name in answer_with:
                 a = reader.answer(item["q"], [P(f"{f}#", t) for f, t, _ in hits])
                 row.update(answer=a.text, answer_s=a.seconds, tokens_in=a.input_tokens,
@@ -76,6 +82,28 @@ def evaluate(items, retrievers, k, reader, answer_with, model_judge):
     return rows
 
 
+def evidence(hits, item):
+    """Do the passages handed to the model contain the answer?"""
+    if not item.get("expect"):
+        return None
+    text = "\n".join(t for _, t, _ in hits).lower()
+    ok = all(re.search(p, text) for p in item["expect"])
+    if item.get("expect_any"):
+        ok = ok and any(re.search(p, text) for p in item["expect_any"])
+    return ok
+
+
+class HideCards:
+    """Card store view that pretends some files were never carded (the
+    freshness test: those files 'arrive' later and get cards on arrival)."""
+
+    def __init__(self, store, hidden_texts):
+        self.store, self.hidden = store, {content_key(t) for t in hidden_texts}
+
+    def get(self, text):
+        return None if content_key(text) in self.hidden else self.store.get(text)
+
+
 def summarize(rows, names):
     out = {}
     for name in names:
@@ -83,11 +111,13 @@ def summarize(rows, names):
         if not rs:
             continue
         judged = [r["correct"] for r in rs if r.get("correct") is not None]
+        ev = [r["evidence"] for r in rs if r.get("evidence") is not None]
         out[name] = dict(
             n=len(rs), found=sum(r["found"] for r in rs) / len(rs),
             mrr=statistics.mean(r["rr"] for r in rs),
             scanned=statistics.mean(r["scanned"] for r in rs),
             ms=statistics.median(r["ms"] for r in rs),
+            evidence=(sum(ev) / len(ev)) if ev else None,
             answered=(sum(judged) / len(judged)) if judged else None, n_judged=len(judged),
             tokens_in=statistics.mean([r["tokens_in"] for r in rs if "tokens_in" in r] or [0]),
             answer_s=statistics.mean([r["answer_s"] for r in rs if "answer_s" in r] or [0]))
@@ -96,11 +126,13 @@ def summarize(rows, names):
 
 def table(summary, title):
     lines = [f"### {title}", "",
-             "| Method | Found in top-k | MRR | Scanned per question | Lookup (median) | Answer right |",
-             "|---|---|---|---|---|---|"]
+             "| Method | Right file in top-k | MRR | Answer in passages | Scanned per question | "
+             "Lookup (median) | Answer right |",
+             "|---|---|---|---|---|---|---|"]
     for name, s in summary.items():
         ans = f"{s['answered']:.0%} ({s['n_judged']})" if s["answered"] is not None else "n/a"
-        lines.append(f"| {name} | {s['found']:.0%} ({s['n']}) | {s['mrr']:.2f} | "
+        ev = f"{s['evidence']:.0%}" if s["evidence"] is not None else "n/a"
+        lines.append(f"| {name} | {s['found']:.0%} ({s['n']}) | {s['mrr']:.2f} | {ev} | "
                      f"{s['scanned']:,.0f} | {s['ms']:.0f} ms | {ans} |")
     return "\n".join(lines) + "\n"
 
@@ -115,7 +147,10 @@ def main():
     ap.add_argument("--model", help="local reader model (default qwen2.5:3b)")
     ap.add_argument("--embed-model", help="local embedding model (default nomic-embed-text)")
     ap.add_argument("--retrieval-only", action="store_true", help="don't generate answers")
-    ap.add_argument("--answer-with", default="keyword-all,embed-all,map,map+embed",
+    ap.add_argument("--only", help="use only these top-level folders, for every method "
+                    "(e.g. concepts,tasks,tutorials,setup)")
+    ap.add_argument("--cards", help="card store from `python -m mapnet.cards` (default: <data>/cards)")
+    ap.add_argument("--answer-with", default="keyword-all,embed-all,map,map+sections,map+cards,map+embed",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -154,7 +189,16 @@ def main():
     work = data / "work" / corpus.name
     if work.exists():
         shutil.rmtree(work)
-    shutil.copytree(corpus, work)
+    if args.only:
+        keep = [x.strip() for x in args.only.split(",") if x.strip()]
+        for d in keep:
+            shutil.copytree(corpus / d, work / d)
+        before = len(items)
+        items = [x for x in items if any(f.split("/")[0] in keep for f in x["files"])]
+        items = [dict(x, files=[f for f in x["files"] if f.split("/")[0] in keep]) for x in items]
+        log(f"Using only {', '.join(keep)}: {len(items)} of {before} questions have an answer there.")
+    else:
+        shutil.copytree(corpus, work)
     holdout_dir = data / "work" / f"{corpus.name}-holdout"
     if holdout_dir.exists():
         shutil.rmtree(holdout_dir)
@@ -173,7 +217,25 @@ def main():
     t0 = time.perf_counter()
     embed_all = EmbedAll(shared, emb, log)
     log(f"  embeddings ({emb.name}): {time.perf_counter() - t0:.1f}s")
-    retrievers = [KeywordAll(shared), embed_all, MapRoute(shared), MapEmbed(shared, embed_all)]
+    retrievers = [KeywordAll(shared), embed_all, MapRoute(shared),
+                  MapRoute(shared, "map+sections", sections=True)]
+
+    # agent-written cards, if they've been built (python -m mapnet.cards ...)
+    store = CardStore(args.cards or data / "cards")
+    held_texts = [read_file(holdout_dir / f) for f in held if (holdout_dir / f).exists()]
+    card_info, shared_cards = None, None
+    if store.count():
+        shared_cards = Shared(work, cards=HideCards(store, held_texts))
+        carded = sum(1 for s in shared_cards.map.sources() if s.cards)
+        card_secs = sum((store.meta(read_file(work / s.path)) or {}).get("seconds", 0)
+                        for s in shared_cards.map.sources() if s.cards)
+        card_info = (carded, card_secs)
+        log(f"  cards: {carded:,} of {n_files:,} files carded (built in {card_secs / 60:.0f} min of model time)")
+        retrievers.append(MapRoute(shared_cards, "map+cards", sections=True))
+    else:
+        log(f"  cards: none found in {store.dir} (build them with: python -m mapnet.cards "
+            f"{corpus} --store {store.dir})")
+    retrievers.append(MapEmbed(shared, embed_all))
     names = [r.name for r in retrievers]
 
     if args.generate:
@@ -201,6 +263,15 @@ def main():
         ingest["map + keyword index"] = time.perf_counter() - t0
         new = [(d, t) for d, t in shared.chunks() if d.split("#")[0] in set(held)]
         ingest["embedding index"] = embed_all.add(new)
+        if shared_cards is not None:
+            t0 = time.perf_counter()
+            shared_cards.fm.sync()
+            if have_reader:  # new files get their cards written on arrival
+                for f in held:
+                    shared_cards.map.set_cards(f, make_cards(read_file(work / f), f, reader))
+                ingest["map + cards (cards written by the model on arrival)"] = time.perf_counter() - t0
+            else:
+                ingest["map + cards (no model: new files have no cards)"] = time.perf_counter() - t0
         rows += evaluate(fresh_items, retrievers, args.k, answer_reader,
                          args.answer_with.split(","), model_judge)
 
@@ -218,6 +289,8 @@ def main():
           f"- Corpus: `{corpus}` — {n_files:,} files, {n_chunks:,} passages",
           f"- Reader: {meta['reader'] or 'none (retrieval only)'}; embeddings: {emb.name}; k = {args.k}",
           f"- Build time: map {meta['build_map_s']}s, embeddings {meta['build_embed_s']}s",
+          *([f"- Cards: {card_info[0]:,} of {n_files:,} files carded, "
+             f"{card_info[1] / 60:.0f} min of model time"] if card_info else []),
           *(f"- Absorbing {len(held)} new files: {k} {v * 1000:.0f} ms" for k, v in ingest.items()),
           ""]
     summaries = {}
@@ -236,7 +309,7 @@ def main():
     (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1),
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
-    log("\n" + "\n".join(md[: 6 + len(ingest)]))
+    log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
     log(f"Full report: {out / 'report.md'}")

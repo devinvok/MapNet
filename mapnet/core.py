@@ -86,6 +86,13 @@ class Node:
         self.doc_ids: list[str] = []
         self.texts: list[str] = []
         self.X: sp.csr_matrix | None = None
+        # the source's own map: which section each document sits in, the
+        # headings around it, and agent-written cards describing each section
+        self.sec: list[str] = []
+        self.heads: list[str] = []
+        self.cards: dict[str, str] = {}
+        self.card_sum = None  # what the cards added to this node's summary
+        self._sec_cache = None
 
     @property
     def path(self) -> str:
@@ -122,7 +129,8 @@ class Result:
 # The map
 # --------------------------------------------------------------------------- #
 class MapNet:
-    def __init__(self, embedder=None, feedback_weight: float = 0.5, name_weight: float = 0.5):
+    def __init__(self, embedder=None, feedback_weight: float = 0.5, name_weight: float = 0.5,
+                 section_weight: float = 0.0, heading_weight: float = 0.5, card_weight: float = 1.0):
         self.emb = embedder or HashEmbedder()
         self.F = self.emb.n_features
         self.root = Node("root", self.F)
@@ -130,15 +138,21 @@ class MapNet:
         self.doc_source: dict[str, Node] = {}
         self.feedback_weight = feedback_weight
         self.name_weight = name_weight  # 0 disables name-following
+        # inside a source: 0 ranks passages alone (the original behaviour); >0 also
+        # walks the source's sections (headings + cards) like the folder map
+        self.section_weight = section_weight
+        self.heading_weight = heading_weight
+        self.card_weight = card_weight
         self._flat = None  # lazily rebuilt global matrix for the flat baseline
 
     # ----------------------------- building -------------------------------- #
-    def register_source(self, name, docs, path=None, acl=(EVERYONE,)):
+    def register_source(self, name, docs, path=None, acl=(EVERYONE,), sections=None):
         """Add a data source (a system, an MCP server, a folder...) to the map.
 
         docs: list of (doc_id, text). path: list of group names, e.g.
         ["finance", "invoices"]. If path is None the source places itself
-        under the group whose summary it most resembles."""
+        under the group whose summary it most resembles. sections: optional
+        list of (section_path, headings_text), one per doc."""
         if path is None:
             path = self.auto_place(self.emb.encode([t for _, t in docs]))
         parent = self._ensure_path(path)
@@ -148,10 +162,10 @@ class MapNet:
         node.acl = set(acl)
         parent.children[name] = node
         self._propagate_acl(node)
-        self.add_documents(node, docs)
+        self.add_documents(node, docs, sections)
         return node
 
-    def add_documents(self, source, docs):
+    def add_documents(self, source, docs, sections=None):
         """Live update: push new documents into an existing source."""
         node = source if isinstance(source, Node) else self.find(source)
         if not docs:
@@ -161,6 +175,10 @@ class MapNet:
         node.X = X if node.X is None else sp.vstack([node.X, X]).tocsr()
         node.doc_ids += ids
         node.texts += texts
+        sections = sections or [("", "")] * len(ids)
+        node.sec += [s for s, _ in sections]
+        node.heads += [h for _, h in sections]
+        node._sec_cache = None
         for i in ids:
             self.doc_source[i] = node
         delta = sp.csr_matrix(X.sum(axis=0))
@@ -175,6 +193,68 @@ class MapNet:
         self.idf.add(X)
         self._flat = None
         return node
+
+    def set_cards(self, source, cards: dict):
+        """Attach agent-written cards to a source: {section_path: card text}.
+        Cards are routing data only. They make the file (and every folder above
+        it) findable by the words people actually use, and steer the walk inside
+        the file. They are never returned as passages or shown to a model."""
+        node = source if isinstance(source, Node) else self.find(source)
+        new = None
+        if cards:
+            V = self.emb.encode(list(cards.values()))
+            new = sp.csr_matrix(V.sum(axis=0)) * self.card_weight
+        delta = (new if new is not None else sp.csr_matrix((1, self.F))) - (
+            node.card_sum if node.card_sum is not None else sp.csr_matrix((1, self.F)))
+        terms = set(np.unique(new.indices).tolist()) if new is not None else set()
+        node.cards, node.card_sum, node._sec_cache = dict(cards or {}), new, None
+        n = node
+        while n is not None:
+            n.summary = n.summary + delta
+            n.summary.eliminate_zeros()
+            n.vocab |= terms
+            n._cache = None
+            n = n.parent
+        return node
+
+    # ----------------------------- inside a source --------------------------- #
+    def _sections(self, src):
+        """Per-source section index, built on first use: one row per section
+        (its passages + its heading path + its card), plus heading-aware
+        passage vectors."""
+        if src._sec_cache is None:
+            secs = list(dict.fromkeys(src.sec))
+            pos = {s: i for i, s in enumerate(secs)}
+            rows = np.array([pos[s] for s in src.sec])
+            M = sp.csr_matrix((np.ones(len(rows)), (rows, np.arange(len(rows)))),
+                              shape=(len(secs), len(rows)))
+            S = _norm_rows(sp.csr_matrix(M @ src.X))
+            S = S + self.heading_weight * self.emb.encode([s or " " for s in secs])
+            if src.cards:
+                C = self.emb.encode([src.cards.get(s, "") or " " for s in secs])
+                S = S + self.card_weight * C
+            S = _norm_rows(sp.csr_matrix(S))
+            vocab = [set(S[i].indices.tolist()) for i in range(S.shape[0])]
+            Xh = _norm_rows(sp.csr_matrix(src.X + self.heading_weight *
+                                          self.emb.encode([h or " " for h in src.heads])))
+            src._sec_cache = (rows, S, vocab, Xh)
+        return src._sec_cache
+
+    def _score_docs(self, src, q):
+        """Scores for every document in a source, and the comparisons it took."""
+        if not self.section_weight:
+            return (src.X @ q.T).toarray().ravel(), src.X.shape[0]
+        # every source takes this path, so files without headings (CSV, plain
+        # text: one big section) compete on equal terms with structured ones
+        rows, S, vocab, Xh = self._sections(src)
+        sec = (S @ q.T).toarray().ravel()
+        if self.name_weight and q.nnz:
+            w = q.data / q.data.sum()
+            sec += self.name_weight * np.array(
+                [sum(wi for t, wi in zip(q.indices, w) if t in v) for v in vocab])
+        doc = (Xh @ q.T).toarray().ravel()
+        w = self.section_weight
+        return (doc + w * sec[rows]) / (1 + w), src.X.shape[0] + S.shape[0]
 
     def remove_source(self, source):
         """Live removal: a file was deleted or is about to be re-registered.
@@ -219,8 +299,8 @@ class MapNet:
                 continue
             if src.kind != "source" or src.X is None or not self._allowed(src, roles):
                 continue
-            scores = (src.X @ q.T).toarray().ravel()
-            cost += len(scores)
+            scores, c = self._score_docs(src, q)
+            cost += c
             searched.append(src.path)
             for i in np.argsort(-scores)[:k]:
                 hits.append(Hit(src.doc_ids[i], float(scores[i]), src.path, src.texts[i]))
@@ -341,8 +421,8 @@ class MapNet:
         chosen = [n for _, n in pool[:source_beam]]
         hits = []
         for src in chosen:
-            scores = (src.X @ q.T).toarray().ravel()
-            cost += len(scores)
+            scores, c = self._score_docs(src, q)
+            cost += c
             for i in np.argsort(-scores)[:k]:
                 hits.append(Hit(src.doc_ids[i], float(scores[i]), src.path, src.texts[i]))
         hits.sort(key=lambda h: -h.score)
