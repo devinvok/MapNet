@@ -15,3 +15,8 @@ compare-results.json
 .env
 
 .DS_Store
+
+# real test downloads and outputs
+realtest/data/
+realtest/results/
+.cache/

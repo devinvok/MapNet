@@ -101,6 +101,7 @@ start leaving each other instructions. MapNet's notes are deliberately limited:
 | `python compare.py` | Accuracy, tokens and time on 27 questions, including 2 about files added seconds earlier |
 | `ANTHROPIC_API_KEY=... python compare.py --cloud --price-in 3 --price-out 15` | Same, side by side with a large cloud model (reading the same passages, and reading every file) |
 | `python research/benchmark.py` | Map vs flat search on a synthetic company of up to 2,304 systems |
+| `bash realtest/setup.sh && python -m realtest.run` | **The real test:** 1,700 real Kubernetes docs, 40 hand-written questions, a local 3B model, against keyword and embedding search over everything. See [realtest/README.md](realtest/README.md) |
 
 See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for a 2-minute recorded demo plan.
 
@@ -161,7 +162,9 @@ tests/           pytest suite (runs without any model or network)
 
 ## Roadmap
 
-- [ ] Small embedding model as the router encoder; evaluate on a real document set
+- [x] Real-data test harness (`realtest/`) with embedding-search baseline and freshness test
+- [ ] Run it with real models and publish the results
+- [ ] Small embedding model as the router encoder
 - [ ] Fallback to a wider search when routing confidence is low
 - [ ] Remote sources (MCP servers) so the map spans machines, DNS-style
 - [ ] Signed note authorship and per-agent reputation
