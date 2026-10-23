@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# local state written while running
+.mapnet-notes.json
+compare-results.json
+
+# never commit secrets
+.env
+
+.DS_Store

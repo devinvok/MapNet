@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mapnet"
+version = "0.1.0"
+description = "A small private model that knows where knowledge lives: a live, permission-aware map of your data with agent trail markers."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "scikit-learn>=1.3"]
+
+[project.optional-dependencies]
+files = ["pypdf>=4.0", "python-docx>=1.0"]
+dev = ["pytest>=7"]
+
+[tool.setuptools]
+packages = ["mapnet"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
