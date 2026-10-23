@@ -171,6 +171,10 @@ class FolderMap:
             cards = self.cards.get(text)
             if cards:
                 self.map.set_cards(node, cards)
+            get_file = getattr(self.cards, "get_file", None)
+            desc = get_file(text) if get_file else None
+            if desc:
+                self.map.set_file_card(node, desc)
 
     def _unindex(self, rel: str):
         rel_path = Path(rel)

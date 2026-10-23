@@ -214,3 +214,62 @@ def test_full_real_test_with_fake_models(tmp_path):
     finally:
         srv.shutdown()
         shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
+
+
+def test_file_descriptions_guide_the_router_to_the_file(tmp_path):
+    """A file whose words don't match the question is found through its description."""
+    from mapnet.llm import OllamaReader
+
+    folder = tmp_path / "docs"
+    (folder / "a").mkdir(parents=True)
+    (folder / "a" / "finalizers.md").write_text(DOC, encoding="utf-8")
+    (folder / "a" / "other.md").write_text("# Namespaces\n\nNamespaces group objects. Create a namespace "
+                                           "with kubectl create namespace.\n", encoding="utf-8")
+    store = CardStore(tmp_path / "cards")
+    store.put_file(DOC, "why a namespace is stuck deleting and won't go away", dict(seconds=2.0))
+    store.put_file((folder / "a" / "other.md").read_text(encoding="utf-8"),
+                   "how to create and organise namespaces", dict(seconds=2.0))
+    fm = FolderMap(folder, mapnet=MapNet(section_weight=1.0, route_weight=0.3), cards=store)
+    fm.sync()
+    assert fm.map.find("a/finalizers.md").file_card
+    q = "why is my namespace stuck deleting"
+    assert fm.map.search(q).hits[0].source == "a/finalizers.md"
+    assert all("won't go away" not in h.text for h in fm.map.search(q).hits)  # never a passage
+    fm.map.set_file_card("a/finalizers.md", "")  # removable
+    assert fm.map.find("a/finalizers.md").file_card == ""
+
+    # the CLI-equivalent builder writes descriptions, resumably, with a (fake) model
+    srv, host = start()
+    try:
+        s2 = CardStore(tmp_path / "cards2")
+        n, _ = build(folder, s2, OllamaReader("qwen2.5:3b", host=host), files_only=True, log=lambda *a: None)
+        assert n == 2 and s2.count_files() == 2 and s2.count() == 0
+        assert build(folder, s2, OllamaReader("qwen2.5:3b", host=host), files_only=True,
+                     log=lambda *a: None)[0] == 0
+    finally:
+        srv.shutdown()
+
+
+def test_full_chain_in_real_test(tmp_path):
+    import subprocess
+    import sys
+
+    srv, host = start()
+    try:
+        data = tmp_path / "data"
+        env = dict(os.environ, OLLAMA_HOST=host)
+        build_out = subprocess.run([sys.executable, "-m", "mapnet.cards", str(ROOT / "examples/company"),
+                                    "--store", str(data / "cards"), "--files-only"],
+                                   cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=env, timeout=300)
+        assert build_out.returncode == 0, build_out.stderr[-2000:]
+        out = subprocess.run(
+            [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
+             "--questions", str(ROOT / "realtest/questions/sample-company.json"), "--data", str(data)],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600, env=env)
+        assert out.returncode == 0, out.stderr[-2000:]
+        assert "| map+file-cards |" in out.stdout
+        assert "File descriptions:" in out.stdout
+        assert "file descriptions (written on arrival)" in out.stdout
+    finally:
+        srv.shutdown()
+        shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)

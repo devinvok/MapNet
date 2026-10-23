@@ -50,7 +50,15 @@ def main():
             reader = ExtractiveReader()
 
     t0 = time.perf_counter()
+    described = [0]
+
     def on_mapped(rel, n, secs, where):
+        if where == "described":
+            described[0] += 1
+            if described[0] in (1, 10) or described[0] % 50 == 0:
+                print(f"\n{DIM}[map] {described[0]} files described in the background "
+                      f"(latest: {rel}, {secs:.0f}s){RESET}\n> ", end="", flush=True)
+            return
         if where == "background":
             print(f"\n{GREEN}[map] mapped {rel} in the background: {n} sections ({secs:.0f}s){RESET}\n> ",
                   end="", flush=True)
@@ -62,7 +70,8 @@ def main():
     print(f"{BOLD}MapNet{RESET} mapped {n_src} files ({a.map.root.n_docs} passages) "
           f"in {time.perf_counter() - t0:.1f}s. Model: {reader.model}. Watching for changes.")
     print(("Files are mapped section by section the first time a question reaches them "
-           "(the first visit takes a few seconds longer).\n") if mapper else
+           "(the first visit takes a few seconds longer), and every file gets a short "
+           "description in the background.\n") if mapper else
           "Files are navigated by their headings (no model to map them).\n")
 
     def on_change(kind, rel, secs):

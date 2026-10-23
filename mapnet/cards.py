@@ -17,6 +17,7 @@ when it changes, and a long build can be stopped and resumed at any time.
     python -m mapnet.cards FOLDER                 # card every file (resumable)
     python -m mapnet.cards FOLDER --limit 50      # just the first 50 files
     python -m mapnet.cards FOLDER --only concepts,tasks   # only these top-level folders
+    python -m mapnet.cards FOLDER --files-only    # just a one-line description per file (fast)
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -86,7 +88,37 @@ class CardStore:
             return None
 
     def count(self):
-        return sum(1 for _ in self.dir.rglob("*.json")) if self.dir.exists() else 0
+        """Files with section cards."""
+        return sum(1 for f in self.dir.rglob("*.json") if not f.name.endswith(".file.json")) \
+            if self.dir.exists() else 0
+
+    # one-line descriptions of whole files, for the folder level of the map
+    def _fpath(self, text):
+        k = content_key(text)
+        return self.dir / k[:2] / f"{k}.file.json"
+
+    def get_file(self, text):
+        p = self._fpath(text)
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))["card"] if p.exists() else None
+        except Exception:
+            return None
+
+    def put_file(self, text, card, meta):
+        p = self._fpath(text)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(dict(card=card, **meta), ensure_ascii=False, indent=1), encoding="utf-8")
+
+    def file_meta(self, text):
+        p = self._fpath(text)
+        try:
+            return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+        except Exception:
+            return None
+
+    def count_files(self):
+        """Files with a file description."""
+        return sum(1 for _ in self.dir.rglob("*.file.json")) if self.dir.exists() else 0
 
 
 def file_sections(text, title):
@@ -104,6 +136,43 @@ def _generate(reader, prompt):
     req = urllib.request.Request(f"{reader.host}/api/generate", body, {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=600) as r:
         return json.loads(json.load(r)["response"])
+
+
+FILE_PROMPT = """You are building a map of a document collection so people can find the right
+file by asking questions in their own words.
+
+File: {title}
+
+Outline of the file (its headings):
+{outline}
+
+Beginning of the file:
+{start}
+
+Write:
+- "about": one plain-language sentence saying what this file is for.
+- "asks": 5 short questions a user might type when this file has their answer.
+  Use everyday words and describe problems, symptoms and goals ("my app keeps
+  restarting", "how do I stop...") instead of copying the file's technical terms.
+
+Reply with JSON only: {{"about": "...", "asks": ["...", "...", "...", "...", "..."]}}"""
+
+
+def make_file_card(text, title, reader):
+    """One short model call per file: what the file is for, and how people would
+    ask for it. Built from the outline and the opening only, so it's cheap."""
+    secs = [s for s, t in file_sections(text, title) if s]
+    outline = "\n".join(f"- {s}" for s in secs)[:1500] or "(no headings)"
+    start = re.sub(r"\s+", " ", text)[:500]
+    try:
+        out = _generate(reader, FILE_PROMPT.format(title=title, outline=outline, start=start))
+    except Exception:
+        return ""
+    if not isinstance(out, dict):
+        return ""
+    about = str(out.get("about", "")).strip()
+    asks = " ".join(str(a).strip() for a in (out.get("asks") or [])[:6])
+    return f"{about} {asks}".strip()[:1000]
 
 
 def make_cards(text, title, reader):
@@ -150,13 +219,16 @@ def iter_files(root):
                 yield p
 
 
-def build(folder, store, reader, limit=None, only=None, log=print):
-    """Card every file that has no cards yet. Safe to stop with Ctrl+C and rerun."""
+def build(folder, store, reader, limit=None, only=None, files_only=False, log=print):
+    """Card every file that has no cards yet. Safe to stop with Ctrl+C and rerun.
+    files_only: write just the one-line file descriptions (fast), not section cards."""
     files = list(iter_files(folder))
     if only:
         files = [f for f in files if f.relative_to(folder).parts[0] in only]
-    todo = [f for f in files if store.get(read_file(f)) is None]
-    log(f"{len(files) - len(todo):,} of {len(files):,} files already have cards.")
+    have = store.get_file if files_only else store.get
+    todo = [f for f in files if have(read_file(f)) is None]
+    what = "file descriptions" if files_only else "section cards"
+    log(f"{len(files) - len(todo):,} of {len(files):,} files already have {what}.")
     if limit:
         todo = todo[:limit]
     log(f"Carding {len(todo):,} files with {reader.model}. Stop any time with Ctrl+C; "
@@ -166,13 +238,20 @@ def build(folder, store, reader, limit=None, only=None, log=print):
         text = read_file(f)
         title = f.relative_to(folder).as_posix()
         t0 = time.perf_counter()
-        cards = make_cards(text, title, reader)
-        secs = time.perf_counter() - t0
-        store.put(text, cards, dict(file=title, model=reader.model, seconds=round(secs, 1)))
+        if files_only:
+            card = make_file_card(text, title, reader)
+            secs = time.perf_counter() - t0
+            store.put_file(text, card, dict(file=title, model=reader.model, seconds=round(secs, 1)))
+            n_out = 1 if card else 0
+        else:
+            cards = make_cards(text, title, reader)
+            secs = time.perf_counter() - t0
+            store.put(text, cards, dict(file=title, model=reader.model, seconds=round(secs, 1)))
+            n_out = len(cards)
         done += 1
         rate = (time.perf_counter() - t_start) / done
         eta = rate * (len(todo) - done)
-        log(f"  [{done}/{len(todo)}] {title}: {len(cards)} cards in {secs:.0f}s "
+        log(f"  [{done}/{len(todo)}] {title}: {n_out} card{'s' if n_out != 1 else ''} in {secs:.0f}s "
             f"(about {eta / 60:.0f} min left)")
     return done, time.perf_counter() - t_start
 
@@ -190,13 +269,16 @@ def main():
     ap.add_argument("--model", help="Ollama model (default $MAPNET_MODEL or qwen2.5:3b)")
     ap.add_argument("--limit", type=int, help="card at most N files this run")
     ap.add_argument("--only", help="only these top-level folders, comma-separated")
+    ap.add_argument("--files-only", action="store_true",
+                    help="write only the one-line file descriptions (fast; one short call per file)")
     args = ap.parse_args()
     reader = OllamaReader(args.model)
     if not reader.available():
         sys.exit(f"Ollama model '{reader.model}' not available. Run: ollama pull {reader.model}")
     try:
         only = [x.strip() for x in args.only.split(",")] if args.only else None
-        n, secs = build(Path(args.folder).resolve(), CardStore(args.store), reader, args.limit, only)
+        n, secs = build(Path(args.folder).resolve(), CardStore(args.store), reader, args.limit, only,
+                        files_only=args.files_only)
         print(f"Done: {n} files in {secs / 60:.1f} min.")
     except KeyboardInterrupt:
         print("\nStopped. Cards written so far are saved; run the same command to continue.")
@@ -219,6 +301,10 @@ class LazyCarder:
     - Cards are stored by file content: a revisit costs nothing, a changed file
       is mapped again on its next visit, and the cards also flow up into the
       folder map, so the file gets easier to find from then on.
+    - describe_missing() queues a one-line description for every file that has
+      none, at a lower priority: the folder level of the map fills in while
+      the computer is otherwise idle, so the router can find files before
+      anyone has visited them.
     """
 
     def __init__(self, folder_map, store, reader, sync_top=1, background=True, on_mapped=None):
@@ -230,7 +316,11 @@ class LazyCarder:
         self.tried: dict[str, object] = {}  # path -> node already handled
         self.files = 0
         self.seconds = 0.0
-        self._q = queue.Queue()
+        self.described = 0
+        self.describe_seconds = 0.0
+        self._described: dict[str, object] = {}
+        self._seq = 0
+        self._q = queue.PriorityQueue()  # (priority, order, kind, path): section maps first
         if background:
             threading.Thread(target=self._worker, daemon=True).start()
 
@@ -264,11 +354,59 @@ class LazyCarder:
             self.on_mapped(rel, len(cards), secs, where)
         return secs
 
+    def _put(self, priority, kind, path):
+        self._seq += 1
+        self._q.put((priority, self._seq, kind, path))
+
+    def _describe_file(self, path):
+        rel = self._rel(path)
+        try:
+            text = read_file(self.fm.root / rel)
+        except OSError:
+            return 0.0
+        t0 = time.perf_counter()
+        desc = self.store.get_file(text)
+        if desc is None:
+            desc = make_file_card(text, rel, self.reader)
+            self.store.put_file(text, desc, dict(file=rel, model=self.reader.model,
+                                                 seconds=round(time.perf_counter() - t0, 1)))
+        secs = time.perf_counter() - t0
+        with self.fm.lock:
+            try:
+                node = self.fm.map.find(path)
+            except KeyError:
+                return secs
+            if desc and not node.file_card:
+                self.fm.map.set_file_card(node, desc)
+        self.described += 1
+        self.describe_seconds += secs
+        if self.on_mapped:
+            self.on_mapped(rel, 1 if desc else 0, secs, "described")
+        return secs
+
+    def describe_missing(self):
+        """Queue a file description for every file that has none (low priority)."""
+        n = 0
+        with self.fm.lock:
+            for node in self.fm.map.sources():
+                if not node.file_card and self._described.get(node.path) is not node:
+                    self._described[node.path] = node
+                    self._put(1, "file", node.path)
+                    n += 1
+        return n
+
+    def describe_now(self, paths):
+        """Describe these files right away (used when files arrive in a test)."""
+        return sum(self._describe_file(p) for p in paths)
+
     def _worker(self):
         while True:
-            path = self._q.get()
+            _, _, kind, path = self._q.get()
             try:
-                self._map_file(path, "background")
+                if kind == "file":
+                    self._describe_file(path)
+                else:
+                    self._map_file(path, "background")
             except Exception:
                 pass
 
@@ -287,5 +425,5 @@ class LazyCarder:
             if i < self.sync_top:
                 mapped.append((path, self._map_file(path, "on arrival")))
             else:
-                self._q.put(path)
+                self._put(0, "sections", path)
         return mapped

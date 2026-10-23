@@ -14,7 +14,8 @@ Every method sees exactly the same passages of the same files.
 | `map` | MapNet: walk the folder map, search only the files it routes to |
 | `map+sections` | ...then walk each file's own map (its headings) to the right section |
 | `map+lazy-cards` | ...where each file is mapped by your local model **the first time a question arrives at it**, starting from no cards at all. DNS style: the folder map resolves the file, the file's own map resolves the passage, and the answer is cached. First-visit time is counted in its lookup time |
-| `map+cards` | ...with every file mapped in advance (only if you've built cards, see below) |
+| `map+file-cards` | **The full chain.** Every file also has a one-line description at the folder level, written in advance, so the router can find files nobody has visited yet; sections are mapped on arrival as above, and the file-level decision carries down into passage ranking. Only if you've built file descriptions, see below |
+| `map+cards` | ...with every file's sections mapped in advance (only if you've built them, see below) |
 | `map+embed` | MapNet routes to a wider set of files, embeddings rank the passages inside them |
 
 For each it measures: whether the right file is among the passages handed to the
@@ -71,7 +72,27 @@ it runs as part of the normal test (expect a few extra minutes for the first
 visits; skip it with `--no-lazy`). The report says how many files were mapped and
 how long a first visit took.
 
-### Mapping everything in advance (optional, overnight)
+### File descriptions (for `map+file-cards`, about an hour)
+
+One short model call per file, from its headings and opening only: what the file
+is for and five questions people would ask, in everyday words. They fill in the
+folder level of the map, which mapping on arrival can't do (a file that is never
+visited never gets mapped). In everyday use (`ask.py`) they are written in the
+background while you work.
+
+```bash
+# time a sample first: it prints seconds per file and an estimate
+python -m mapnet.cards realtest/data/k8s-docs --store realtest/data/cards --files-only --only concepts,tasks,tutorials,setup --limit 10
+# then the rest (Ctrl+C any time; rerun to continue)
+python -m mapnet.cards realtest/data/k8s-docs --store realtest/data/cards --files-only --only concepts,tasks,tutorials,setup
+# then the test
+python -m realtest.run --only concepts,tasks,tutorials,setup
+```
+
+Files in the freshness test are treated as undescribed until they arrive; their
+description is written on arrival and the time is reported.
+
+### Mapping every section in advance (optional, overnight)
 
 A file has its own map in its headings, and `map+sections` walks it. But people
 ask in words the docs never use ("why is my namespace stuck deleting?" is answered
@@ -137,6 +158,20 @@ contact with real data. If the map falls clearly behind `embed-all`, look at the
 "Misses" section of the report: it shows where routing took a wrong turn, which
 is the thing to fix next (for example, a fallback to wider search on low
 confidence, or an embedding-based router).
+
+## Second real run: hand-written folders (469 files), sections and mapping on arrival
+
+| Method | Right file found | Answer in passages | Answer right | Scanned |
+|---|---|---|---|---|
+| embed-all | 80% | 89% | **71%** | 7,460 |
+| map | 74% | 57% | 57% | 253 |
+| map+sections | 71% | 69% | 66% | 313 |
+| map+lazy-cards | 71% | 71% | **71%** | 412 |
+
+The small model answered as accurately from MapNet's passages as from embedding
+search, on 35 questions (each question is about 3 points, so this is a tie, not a
+win). Remaining gaps: finding the file (71% vs 80%), which is what file
+descriptions target, and a 32 s first visit per file on a laptop CPU.
 
 ## First real run (qwen2.5:3b + nomic-embed-text, Windows laptop)
 

@@ -92,6 +92,8 @@ class Node:
         self.heads: list[str] = []
         self.cards: dict[str, str] = {}
         self.card_sum = None  # what the cards added to this node's summary
+        self.file_card = ""   # one-line description of the whole source
+        self.file_card_sum = None
         self._sec_cache = None
 
     @property
@@ -130,7 +132,8 @@ class Result:
 # --------------------------------------------------------------------------- #
 class MapNet:
     def __init__(self, embedder=None, feedback_weight: float = 0.5, name_weight: float = 0.5,
-                 section_weight: float = 0.0, heading_weight: float = 0.5, card_weight: float = 1.0):
+                 section_weight: float = 0.0, heading_weight: float = 0.5, card_weight: float = 1.0,
+                 route_weight: float = 0.0):
         self.emb = embedder or HashEmbedder()
         self.F = self.emb.n_features
         self.root = Node("root", self.F)
@@ -143,6 +146,9 @@ class MapNet:
         self.section_weight = section_weight
         self.heading_weight = heading_weight
         self.card_weight = card_weight
+        # DNS-style authority: how much the score that routed us to a file carries
+        # down into its passages. 0 = passages compete on their own words only
+        self.route_weight = route_weight
         self._flat = None  # lazily rebuilt global matrix for the flat baseline
 
     # ----------------------------- building -------------------------------- #
@@ -208,6 +214,25 @@ class MapNet:
             node.card_sum if node.card_sum is not None else sp.csr_matrix((1, self.F)))
         terms = set(np.unique(new.indices).tolist()) if new is not None else set()
         node.cards, node.card_sum, node._sec_cache = dict(cards or {}), new, None
+        n = node
+        while n is not None:
+            n.summary = n.summary + delta
+            n.summary.eliminate_zeros()
+            n.vocab |= terms
+            n._cache = None
+            n = n.parent
+        return node
+
+    def set_file_card(self, source, text: str):
+        """Attach a plain-language description of the whole source. It feeds the
+        folder levels of the map only (how the router finds this file), not the
+        walk inside it. Routing data only: never returned as a passage."""
+        node = source if isinstance(source, Node) else self.find(source)
+        zero = sp.csr_matrix((1, self.F))
+        new = sp.csr_matrix(self.emb.encode([text])) * self.card_weight if text else None
+        delta = (new if new is not None else zero) - (node.file_card_sum if node.file_card_sum is not None else zero)
+        terms = set(np.unique(new.indices).tolist()) if new is not None else set()
+        node.file_card, node.file_card_sum = text or "", new
         n = node
         while n is not None:
             n.summary = n.summary + delta
@@ -301,6 +326,9 @@ class MapNet:
                 continue
             scores, c = self._score_docs(src, q)
             cost += c
+            if self.route_weight and src.parent is not None:
+                kids, rs = self._child_scores(src.parent, q)
+                scores = scores + self.route_weight * float(rs[kids.index(src)])
             searched.append(src.path)
             for i in np.argsort(-scores)[:k]:
                 hits.append(Hit(src.doc_ids[i], float(scores[i]), src.path, src.texts[i]))
@@ -419,10 +447,13 @@ class MapNet:
             level += 1
         pool.sort(key=lambda x: -x[0])
         chosen = [n for _, n in pool[:source_beam]]
+        route = {id(n): sc for sc, n in pool[:source_beam]}
         hits = []
         for src in chosen:
             scores, c = self._score_docs(src, q)
             cost += c
+            if self.route_weight:
+                scores = scores + self.route_weight * route[id(src)]
             for i in np.argsort(-scores)[:k]:
                 hits.append(Hit(src.doc_ids[i], float(scores[i]), src.path, src.texts[i]))
         hits.sort(key=lambda h: -h.score)

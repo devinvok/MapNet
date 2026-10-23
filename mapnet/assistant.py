@@ -38,7 +38,7 @@ class Assistant:
         """cards: a CardStore. map_files_with: a model (OllamaReader) that maps each
         file the first time a lookup arrives there; its cards go into `cards`."""
         # walk folders, then the headings (and agent cards, if any) inside each file
-        self.fm = FolderMap(folder, mapnet=MapNet(section_weight=1.0), cards=cards)
+        self.fm = FolderMap(folder, mapnet=MapNet(section_weight=1.0, route_weight=0.3), cards=cards)
         self.fm.sync()
         self.map = self.fm.map
         self.notes = NoteBoard(self.map)
@@ -53,6 +53,8 @@ class Assistant:
             self.fm.cards = store
             self.lazy = LazyCarder(self.fm, store, map_files_with, on_mapped=on_mapped,
                                    background=background)
+            if background:  # fill in the folder level of the map while idle
+                self.lazy.describe_missing()
         self.confident = confident  # top excerpt score that counts as "found it"
         self.k = k
 
@@ -72,6 +74,8 @@ class Assistant:
                         break
                     self.notes.reject(note)
             if res is None:
+                if self.lazy and self.lazy._q.qsize() == 0:
+                    self.lazy.describe_missing()  # new files since last time
                 res = self.map.search(question, k=self.k, roles=roles, min_score=self.confident)
                 if self.lazy and res.sources_searched:
                     # arrived at the files: map the top one now, then walk its map

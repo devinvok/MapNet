@@ -84,7 +84,9 @@ people would ask in their own words, so "why is my namespace stuck deleting?"
 lands on a page about *finalizers*. The map is cached like a DNS answer: revisits
 are instant, a changed file is remapped on its next visit, and the cards flow up
 into the folder map so the file is easier to find from then on. Files the lookup
-touched but didn't open are mapped in the background. Cards guide routing only;
+touched but didn't open are mapped in the background, and every file gets a
+one-line description at the folder level while the computer is idle, so the
+router can find files no one has visited yet. Cards guide routing only;
 they are never shown to the answering model. (To map a whole folder in advance:
 `python -m mapnet.cards FOLDER`.)
 

@@ -42,7 +42,8 @@ from mapnet.llm import ExtractiveReader, OllamaReader  # noqa: E402
 from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
-from realtest.retrievers import EmbedAll, KeywordAll, MapEmbed, MapLazy, MapRoute, Shared  # noqa: E402
+from realtest.retrievers import (CombinedCards, EmbedAll, KeywordAll, MapEmbed, MapLazy,  # noqa: E402
+                                 MapRoute, Shared)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -103,6 +104,9 @@ class HideCards:
     def get(self, text):
         return None if content_key(text) in self.hidden else self.store.get(text)
 
+    def get_file(self, text):
+        return None if content_key(text) in self.hidden else self.store.get_file(text)
+
 
 def summarize(rows, names):
     out = {}
@@ -152,7 +156,8 @@ def main():
     ap.add_argument("--cards", help="card store from `python -m mapnet.cards` (default: <data>/cards)")
     ap.add_argument("--no-lazy", action="store_true", help="skip map+lazy-cards (needs the model, adds time)")
     ap.add_argument("--answer-with",
-                    default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+cards,map+embed",
+                    default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
+                            "map+cards,map+embed",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -248,6 +253,26 @@ def main():
             "question reaches it")
     elif not have_reader:
         log("  map+lazy-cards: skipped (needs the reader model)")
+
+    # the full chain: file descriptions built in advance + section maps on arrival
+    file_info, chain = None, None
+    if store.count_files() and have_reader and not args.no_lazy:
+        chain_dir = data / "work" / "chain-cards"  # section cards start empty every run
+        if chain_dir.exists():
+            shutil.rmtree(chain_dir)
+        combined = CombinedCards(HideCards(store, held_texts), CardStore(chain_dir))
+        chain_shared = Shared(work, cards=combined)
+        chain = MapLazy(chain_shared, combined, reader, name="map+file-cards", route_weight=0.3)
+        described = [s for s in chain_shared.map.sources() if s.file_card]
+        d_secs = sum((store.file_meta(read_file(work / s.path)) or {}).get("seconds", 0) for s in described)
+        file_info = (len(described), d_secs)
+        log(f"  map+file-cards: {len(described):,} of {n_files:,} files described "
+            f"({d_secs / 60:.0f} min of model time); sections mapped on arrival")
+        retrievers.append(chain)
+    elif have_reader and not args.no_lazy:
+        log(f"  map+file-cards: skipped, no file descriptions in {store.dir}. Build them with:\n"
+            f"    python -m mapnet.cards {corpus} --store {store.dir} --files-only"
+            + (f" --only {args.only}" if args.only else ""))
     retrievers.append(MapEmbed(shared, embed_all))
     names = [r.name for r in retrievers]
 
@@ -280,6 +305,11 @@ def main():
             t0 = time.perf_counter()
             lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited
             ingest["map + lazy cards (mapped later, on first visit)"] = time.perf_counter() - t0
+        if chain is not None:
+            t0 = time.perf_counter()
+            chain.s.fm.sync()
+            chain.lazy.describe_now(held)  # new files get their one-line description on arrival
+            ingest["map + file descriptions (written on arrival)"] = time.perf_counter() - t0
         if shared_cards is not None:
             t0 = time.perf_counter()
             shared_cards.fm.sync()
@@ -308,6 +338,10 @@ def main():
           f"- Build time: map {meta['build_map_s']}s, embeddings {meta['build_embed_s']}s",
           *([f"- Cards: {card_info[0]:,} of {n_files:,} files carded, "
              f"{card_info[1] / 60:.0f} min of model time"] if card_info else []),
+          *([f"- File descriptions: {file_info[0]:,} of {n_files:,} files, "
+             f"{file_info[1] / 60:.0f} min of model time, built in advance"] if file_info else []),
+          *([f"- map+file-cards: {chain.lazy.files} files mapped on first visit, "
+             f"{chain.lazy.seconds / 60:.1f} min of model time"] if chain else []),
           *([f"- Lazy cards: {lazy.lazy.files} files mapped on first visit during the test, "
              f"{lazy.lazy.seconds / 60:.1f} min of model time "
              f"({lazy.lazy.seconds / max(lazy.lazy.files, 1):.0f} s per first visit, included in "
@@ -330,7 +364,8 @@ def main():
     (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1),
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
-    log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)]))
+    log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)
+                            + (2 if chain else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
     log(f"Full report: {out / 'report.md'}")

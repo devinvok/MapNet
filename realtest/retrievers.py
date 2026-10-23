@@ -5,7 +5,9 @@ The contenders. All of them see exactly the same chunks of the same files.
   embed-all     embedding search over every chunk (the standard modern RAG baseline)
   map           MapNet routing: walk the map, search only the chosen files
   map+sections  ...and inside each file, walk its headings to the right section
-  map+cards     ...with agent-written section cards guiding both walks
+  map+lazy-cards  ...where each file is mapped by the model the first time a question reaches it
+  map+file-cards  ...plus a one-line description of every file at the folder level: the full chain
+  map+cards     ...with agent-written section cards for every file, made in advance
   map+embed     MapNet routing to a wider set of files, then embedding ranking inside them
 """
 from __future__ import annotations
@@ -132,11 +134,10 @@ class MapLazy:
     gets better as questions come in, and the cost of every first visit is
     counted in this method's lookup time."""
 
-    name = "map+lazy-cards"
-
-    def __init__(self, shared, store, reader):
+    def __init__(self, shared, store, reader, name="map+lazy-cards", route_weight=0.0):
         from mapnet.cards import LazyCarder
-        self.s = shared
+        self.s, self.name = shared, name
+        shared.map.route_weight = route_weight  # file-level decisions carry down to passages
         self.lazy = LazyCarder(shared.fm, store, reader, sync_top=1, background=False)
 
     def search(self, q, k):
@@ -151,3 +152,23 @@ class MapLazy:
         finally:
             m.section_weight = old
         return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost
+
+
+class CombinedCards:
+    """File descriptions from one store (built in advance), section cards from
+    another (written on arrival during the run)."""
+
+    def __init__(self, file_cards, section_cards):
+        self.files, self.sections = file_cards, section_cards
+
+    def get(self, text):
+        return self.sections.get(text)
+
+    def put(self, text, cards, meta):
+        self.sections.put(text, cards, meta)
+
+    def get_file(self, text):
+        return self.files.get_file(text) or self.sections.get_file(text)
+
+    def put_file(self, text, card, meta):
+        self.sections.put_file(text, card, meta)
