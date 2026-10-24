@@ -287,3 +287,16 @@ Run in a sandbox with no Ollama, so `embed-all` used a weak no-model stand-in
 On the 5 freshness questions, the map absorbed the new files in about 0.1 s and
 found 3 of 5; the stand-in embedding methods found 4 of 5. The real embedding
 model on your machine is the test that matters.
+
+## Where the time goes
+
+The test runs **one method at a time** (all its questions, then the next method), so Ollama
+keeps the same model loaded instead of swapping on every question. The report's header lists
+the total wall-clock time (setup, phase A, phase B) and the time spent retrieving and
+answering. Each table is followed by a **time table** per method: lookup median, mean,
+slowest and total, then for every reader the answer time, the time per question (lookup +
+answer) and the total. The median hides first visits (a file mapped or embedded for the
+first time), so look at the mean, the slowest lookup and the total. Reader answers are
+usually the largest part: every method's passages are answered by every reader. To make a
+run shorter, use `--skip`, `--answer-with` (which methods get answered) or a single
+`--reader-model`.

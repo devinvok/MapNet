@@ -98,3 +98,35 @@ def test_ollama_paths(tmp_path):
         assert j("Birth parents get 20 weeks.", qs[0]) and not j("Twelve weeks.", qs[0])
     finally:
         srv.shutdown()
+
+
+def test_evaluate_runs_one_method_at_a_time_and_reports_time():
+    from realtest.run import evaluate, summarize, time_table
+
+    order = []
+
+    class R:
+        def __init__(self, name):
+            self.name = name
+
+        def search(self, q, k):
+            order.append((self.name, q))
+            return [("a.md", "text", 1.0)], 1
+
+    class Reader:
+        model = "m"
+
+        def answer(self, q, hits):
+            from types import SimpleNamespace
+            return SimpleNamespace(text="ok", seconds=2.0, input_tokens=5)
+
+    items = [{"q": "q1", "files": ["a.md"]}, {"q": "q2", "files": ["a.md"]}]
+    timing = {}
+    rows = evaluate(items, [R("x"), R("y")], 4, [Reader()], ["x", "y"], None, timing)
+    # all of x's questions come before any of y's: models stay loaded
+    assert [n for n, _ in order] == ["x", "x", "y", "y"]
+    assert set(timing["retrieve"]) == {"x", "y"} and "m" in timing["answer"]
+    s = summarize(rows, ["x", "y"])
+    assert s["x"]["answer_mean_s"]["m"] == 2.0 and s["x"]["answer_total_s"]["m"] == 4.0
+    t = time_table(s, "T")
+    assert "Per question (m)" in t and "2." in t

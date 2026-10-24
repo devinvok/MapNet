@@ -60,13 +60,21 @@ def log(*a):
     print(*a, flush=True)
 
 
-def evaluate(items, retrievers, k, readers, answer_with, model_judge):
-    """Retrieve once per (question, method); then each reader answers the same
-    passages, one reader at a time (so Ollama doesn't swap models constantly)."""
+def evaluate(items, retrievers, k, readers, answer_with, model_judge, timing=None):
+    """Run ONE METHOD AT A TIME (all its questions, then the next method), so Ollama
+    keeps the same model loaded instead of swapping between the embedding model and
+    the map model on every question. Methods don't affect each other, so the results
+    are the same. Then each reader answers the same passages, one reader at a time.
+
+    `timing`, if given, is filled with wall-clock seconds: timing["retrieve"][method],
+    timing["answer"][reader model]."""
     rows, pending = [], []
-    for n, item in enumerate(items, 1):
-        gold = set(item["files"])
-        for r in retrievers:
+    timing = timing if timing is not None else {}
+    ret_t, ans_t = timing.setdefault("retrieve", {}), timing.setdefault("answer", {})
+    for mi, r in enumerate(retrievers, 1):
+        t_method = time.perf_counter()
+        for item in items:
+            gold = set(item["files"])
             t0 = time.perf_counter()
             hits, scanned = r.search(item["q"], k)
             ms = (time.perf_counter() - t0) * 1000
@@ -79,17 +87,24 @@ def evaluate(items, retrievers, k, readers, answer_with, model_judge):
             if readers and r.name in answer_with:
                 pending.append((row, item, hits))
             rows.append(row)
-        if n % 10 == 0 or n == len(items):
-            log(f"    {n}/{len(items)} questions retrieved")
+        secs = time.perf_counter() - t_method
+        ret_t[r.name] = ret_t.get(r.name, 0.0) + secs
+        log(f"    [{mi}/{len(retrievers)}] {r.name}: {len(items)} questions retrieved in {secs:.0f}s")
     for ri, reader in enumerate(readers or []):
         log(f"    answering {len(pending)} with {reader.model} ...")
-        for row, item, hits in pending:
+        t_reader = time.perf_counter()
+        for n, (row, item, hits) in enumerate(pending, 1):
             a = reader.answer(item["q"], [P(f"{f}#", t) for f, t, _ in hits])
             res = dict(answer=a.text, answer_s=a.seconds, tokens_in=a.input_tokens,
                        correct=judge(a.text, item, model_judge))
             row.setdefault("by_reader", {})[reader.model] = res
             if ri == 0:
                 row.update(res)
+            if n % 50 == 0:
+                log(f"      {n}/{len(pending)} answered ({time.perf_counter() - t_reader:.0f}s so far)")
+        secs = time.perf_counter() - t_reader
+        ans_t[reader.model] = ans_t.get(reader.model, 0.0) + secs
+        log(f"    {reader.model}: {len(pending)} answers in {secs:.0f}s")
     return rows
 
 
@@ -135,13 +150,46 @@ def summarize(rows, names):
             answered=(sum(judged) / len(judged)) if judged else None, n_judged=len(judged),
             tokens_in=statistics.mean([r["tokens_in"] for r in rs if "tokens_in" in r] or [0]),
             answer_s=statistics.mean([r["answer_s"] for r in rs if "answer_s" in r] or [0]))
-        per = {}
+        per, secs = {}, {}
         for r in rs:
             for model, res in r.get("by_reader", {}).items():
+                secs.setdefault(model, []).append(res["answer_s"])
                 if res["correct"] is not None:
                     per.setdefault(model, []).append(res["correct"])
         out[name]["by_reader"] = {m: (sum(v) / len(v), len(v)) for m, v in per.items()}
+        # time: lookups include first-visit work (mapping/embedding) that the median hides
+        out[name]["lookup_mean_s"] = statistics.mean(r["ms"] for r in rs) / 1000
+        out[name]["lookup_total_s"] = sum(r["ms"] for r in rs) / 1000
+        out[name]["lookup_max_s"] = max(r["ms"] for r in rs) / 1000
+        out[name]["answer_mean_s"] = {m: statistics.mean(v) for m, v in secs.items()}
+        out[name]["answer_total_s"] = {m: sum(v) for m, v in secs.items()}
     return out
+
+
+def _dur(s):
+    return f"{s:.1f}s" if s < 60 else f"{s / 60:.1f} min"
+
+
+def time_table(summary, title):
+    """Where the time goes, per method: the lookup (median, mean, slowest, total) and
+    the reader's answer time. 'Per question' = mean lookup + mean answer, per reader."""
+    models = list(dict.fromkeys(m for s in summary.values() for m in s.get("answer_mean_s", {})))
+    cols = ["Lookup median", "Lookup mean", "Lookup slowest", "Lookup total"]
+    for m in models:
+        cols += [f"Answer ({m})", f"Per question ({m})", f"Total ({m})"]
+    lines = [f"### {title}: time", "", "| Method | " + " | ".join(cols) + " |", "|---|" + "---|" * len(cols)]
+    for name, s in summary.items():
+        cells = [f"{s['ms'] / 1000:.2f}s", f"{s['lookup_mean_s']:.2f}s",
+                 f"{s['lookup_max_s']:.1f}s", _dur(s["lookup_total_s"])]
+        for m in models:
+            if m in s.get("answer_mean_s", {}):
+                a = s["answer_mean_s"][m]
+                cells += [f"{a:.1f}s", f"{s['lookup_mean_s'] + a:.1f}s",
+                          _dur(s["lookup_total_s"] + s["answer_total_s"][m])]
+            else:
+                cells += ["n/a"] * 3
+        lines.append(f"| {name} | " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
 
 
 def table(summary, title):
@@ -189,6 +237,7 @@ def main():
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
 
+    t_start = time.perf_counter()
     data = Path(args.data)
     data.mkdir(parents=True, exist_ok=True)
     if args.corpus == "k8s":
@@ -380,13 +429,20 @@ def main():
     model_judge = ModelJudge(judge_model) if judge_model else None
 
     # ---- phase A
+    setup_s = time.perf_counter() - t_start
+    timing = {}
     normal = [x for x in items if not x.get("fresh")]
-    log(f"\nPhase A: {len(normal)} questions ...")
-    rows = evaluate(normal, retrievers, args.k, answer_readers, args.answer_with.split(","), model_judge)
+    log(f"\nPhase A: {len(normal)} questions, one method at a time ...")
+    t_a = time.perf_counter()
+    rows = evaluate(normal, retrievers, args.k, answer_readers, args.answer_with.split(","), model_judge,
+                    timing)
+    phase_a_s = time.perf_counter() - t_a
+    phase_b_s = 0.0
 
     # ---- phase B: freshness
     ingest = {}
     if fresh_items and held:
+        t_b = time.perf_counter()
         log(f"\nPhase B: adding {len(held)} files that were held out, then asking about them ...")
         for f in held:
             (work / f).parent.mkdir(parents=True, exist_ok=True)
@@ -435,7 +491,9 @@ def main():
             else:
                 ingest["map + cards (no model: new files have no cards)"] = time.perf_counter() - t0
         rows += evaluate(fresh_items, retrievers, args.k, answer_readers,
-                         args.answer_with.split(","), model_judge)
+                         args.answer_with.split(","), model_judge, timing)
+        phase_b_s = time.perf_counter() - t_b
+    total_s = time.perf_counter() - t_start
 
     # ---- report
     out = HERE / "results" / datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -445,6 +503,20 @@ def main():
                 cartographer=reader.model if have_reader else None, embedder=emb.name,
                 build_map_s=round(shared.build_s, 2), build_embed_s=round(embed_all.build_s, 2),
                 ingest_s={k: round(v, 3) for k, v in ingest.items()})
+    ret_t, ans_t = timing.get("retrieve", {}), timing.get("answer", {})
+    time_lines = [f"- **Total wall-clock: {_dur(total_s)}.** Setup (indexes, embeddings, descriptions) "
+                  f"{_dur(setup_s)}; phase A {_dur(phase_a_s)}"
+                  + (f"; phase B {_dur(phase_b_s)}" if phase_b_s else "") + ".",
+                  f"- Time retrieving (all methods): {_dur(sum(ret_t.values()))}"
+                  + (" (" + ", ".join(f"{n} {_dur(v)}" for n, v in ret_t.items()) + ")" if ret_t else ""),
+                  *([f"- Time answering: {_dur(sum(ans_t.values()))} ("
+                     + ", ".join(f"{m} {_dur(v)}" for m, v in ans_t.items()) + ")"] if ans_t else []),
+                  "- The 'Lookup' columns below time only the retrieval step per question. The reader's "
+                  "answer time is listed separately, and 'Per question' adds the two."]
+    meta["wall_clock_s"] = dict(total=round(total_s, 1), setup=round(setup_s, 1), phase_a=round(phase_a_s, 1),
+                                phase_b=round(phase_b_s, 1),
+                                retrieve={k: round(v, 1) for k, v in ret_t.items()},
+                                answer={k: round(v, 1) for k, v in ans_t.items()})
     groups = {"Hand-written questions": [r for r in rows if not r["generated"] and not r["fresh"]],
               "Generated questions": [r for r in rows if r["generated"]],
               "Fresh files (added after indexing)": [r for r in rows if r["fresh"]]}
@@ -477,12 +549,15 @@ def main():
              f"({lazy.lazy.seconds / max(lazy.lazy.files, 1):.0f} s per first visit, included in "
              f"map+lazy-cards lookup times)"] if lazy else []),
           *(f"- Absorbing {len(held)} new files: {k} {v * 1000:.0f} ms" for k, v in ingest.items()),
+          *time_lines,
           ""]
     summaries = {}
     for title, rs in groups.items():
         if rs:
             summaries[title] = summarize(rs, names)
             md.append(table(summaries[title], title))
+            if answer_readers:
+                md.append(time_table(summaries[title], title))
     if any(r["generated"] for r in rows):
         md.append("_Generated questions often reuse the source passage's wording, which favours "
                   "keyword search. Weigh the hand-written results more._\n")
@@ -494,11 +569,13 @@ def main():
     (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1),
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
-    log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)
+    log("\n" + "\n".join(md[: 6 + len(ingest) + len(time_lines) + (1 if card_info else 0) + (1 if lazy else 0)
                             + (2 if chain else 0) + (1 if meaning else 0) + (1 if etree else 0)
                             + (1 if refmap else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
+        if answer_readers:
+            log(time_table(s, title))
     log(f"Full report: {out / 'report.md'}")
 
 
