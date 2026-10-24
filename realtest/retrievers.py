@@ -208,8 +208,14 @@ class RefMapRoute:
 
     name = "ref-map"
 
-    def __init__(self, shared, embedder, log=print):
+    def __init__(self, shared, embedder=None, log=print, translator=None, name="ref-map", share=None):
+        """`share`: another RefMapRoute whose built map is reused (the references and the
+        files already read), e.g. for the variant that translates the question first."""
         from mapnet.refmap import RefMap
+        self.name, self.translator = name, translator
+        if share is not None:
+            self.s, self.map, self.build_s = share.s, share.map, 0.0
+            return
         self.s = shared
         self.map = RefMap(shared.map, embedder)
         t0 = time.perf_counter()
@@ -217,5 +223,5 @@ class RefMapRoute:
         self.build_s = time.perf_counter() - t0
 
     def search(self, q, k):
-        r = self.map.search(q, k=k)
+        r = self.map.search(q, k=k, translator=self.translator)
         return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost

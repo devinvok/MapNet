@@ -39,6 +39,7 @@ from mapnet.cards import CardStore, content_key, make_cards, make_file_card  # n
 from mapnet.embed import LsaEmbedder, OllamaEmbedder  # noqa: E402
 from mapnet.folder import read_file  # noqa: E402
 from mapnet.meaning import MeaningRouter  # noqa: E402
+from mapnet.refmap import TermTranslator  # noqa: E402
 from mapnet.llm import ExtractiveReader, OllamaReader  # noqa: E402
 from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
@@ -211,6 +212,58 @@ def table(summary, title):
     return "\n".join(lines) + "\n"
 
 
+def explain_report(rows, beam=6):
+    """Markdown: for ref-map, was a miss the walk's fault or the references'? The control scores
+    every reference directly (no walk) and takes the best `beam` files."""
+    if not rows:
+        return ""
+    ok = lambda r, k="flat_rank": bool(r[k]) and r[k] <= beam  # noqa: E731
+    both = [r for r in rows if r["in_chosen"] and ok(r)]
+    walk_only = [r for r in rows if r["in_chosen"] and not ok(r)]
+    lost = [r for r in rows if not r["in_chosen"] and ok(r)]
+    neither = [r for r in rows if not r["in_chosen"] and not ok(r)]
+    lines = ["## Why ref-map missed (hand-written questions)", "",
+             f"The control scores the question against every reference directly, with no walk, and takes "
+             f"the best {beam} files. If the control also misses, the references can't find the page; "
+             f"if only the walk misses, the walk lost it. ('Found by the walk' means the right file was "
+             f"among the files the walk picked to read, up to {beam}; the main table counts a file only if "
+             f"one of the returned passages comes from it, so the two numbers can differ.)", "",
+             "| | Questions |", "|---|---|",
+             f"| Found by the walk and by the control | {len(both)} |",
+             f"| Found by the walk only | {len(walk_only)} |",
+             f"| **Control finds it, the walk lost it** | {len(lost)} |",
+             f"| **Neither finds it (the references can't)** | {len(neither)} |", ""]
+    if lost:
+        far = sum(1 for r in lost if not r["home_visited"])
+        cut = sum(1 for r in lost if r["cut"])
+        lines += [f"Where the walk lost it ({len(lost)}): never entered the right folder: {far}; "
+                  f"chosen but past the limit of new files read per question: {cut}; "
+                  f"entered the folder but ranked it too low: {len(lost) - far - cut}.", ""]
+    if neither:
+        ranks = sorted(r["flat_rank"] or 10 ** 6 for r in neither)
+        mid = ranks[len(ranks) // 2]
+        lines += [f"Where the right file ranked in the control when nothing found it: median "
+                  f"{'beyond the list' if mid >= 10 ** 6 else mid}.", ""]
+    from collections import Counter
+    mags = [(f, c) for f, c in Counter(r["flat_top"] for r in rows if not ok(r) and r["flat_top"]).most_common(6)
+            if c >= 2]
+    if mags:
+        lines += ["Files that took first place for several questions they don't answer (magnets): "
+                  + "; ".join(f"`{f}` ×{c}" for f, c in mags), ""]
+    wt = [r for r in rows if "with_terms" in r]
+    if wt:
+        t_walk = sum(1 for r in wt if r["with_terms"]["in_chosen"])
+        t_ctl = sum(1 for r in wt if r["with_terms"]["flat_rank"] and r["with_terms"]["flat_rank"] <= beam)
+        lines += [f"With the question translated into technical terms: the walk finds the file for {t_walk} of "
+                  f"{len(wt)} questions (without: {sum(r['in_chosen'] for r in wt)}); the control for {t_ctl} "
+                  f"(without: {sum(ok(r) for r in wt)}).", "",
+                  "What the translator wrote for the questions nothing found:", ""]
+        for r in neither[:8]:
+            lines.append(f"- “{r['q']}” → {r['with_terms']['terms'] or '(nothing)'}")
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--corpus", default="k8s", help="'k8s' or a folder path")
@@ -230,14 +283,18 @@ def main():
     ap.add_argument("--cards", help="card store from `python -m mapnet.cards` (default: <data>/cards)")
     ap.add_argument("--no-lazy", action="store_true", help="skip the methods that map files on arrival")
     ap.add_argument("--skip", default="", help="comma-separated methods to leave out (saves time)")
+    ap.add_argument("--explain", action="store_true",
+                    help="after the questions: for ref-map, say why each miss happened (compares the "
+                         "walk with scoring every reference directly)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+meaning,map+cards,map+embed,embed-tree,ref-map",
+                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
 
     t_start = time.perf_counter()
+    skip_set = {x.strip() for x in args.skip.split(",") if x.strip()}
     data = Path(args.data)
     data.mkdir(parents=True, exist_ok=True)
     if args.corpus == "k8s":
@@ -360,7 +417,7 @@ def main():
             + (f" --only {args.only}" if args.only else ""))
     # the full chain walked by meaning: embeds the map (files, sections), not the passages
     meaning = None
-    if "map+meaning" not in args.skip:
+    if "map+meaning" not in skip_set:
         m_dir = data / "work" / "meaning-cards"  # section cards start empty every run
         if m_dir.exists():
             shutil.rmtree(m_dir)
@@ -381,7 +438,7 @@ def main():
 
     # the map walked by meaning, files embedded on arrival, with its own empty cache
     etree = None
-    if "embed-tree" not in args.skip:
+    if "embed-tree" not in skip_set:
         if isinstance(emb, OllamaEmbedder):
             t_dir = data / "work" / "tree-cache"  # empty every run: first visits are real work
             if t_dir.exists():
@@ -398,7 +455,7 @@ def main():
 
     # the map of references: descriptions + questions, each placed where it resolves
     refmap = None
-    if "ref-map" not in args.skip:
+    if "ref-map" not in skip_set:
         if isinstance(emb, OllamaEmbedder):
             r_dir = data / "work" / "refmap-cache"  # empty every run: all embedding is counted
             if r_dir.exists():
@@ -414,6 +471,14 @@ def main():
         log(f"  ref-map: {refmap.map.vectors:,} references ({refmap.map.placed_away:,} placed outside their "
             f"file's own folder) in {refmap.build_s:.0f}s; file contents embedded only on arrival")
         retrievers.append(refmap)
+    # ref-map, with the question first translated into the technical terms the right page
+    # would use. Shares the built references (and the files already read) with ref-map.
+    terms_route = None
+    if refmap is not None and have_reader and "ref-map+terms" not in skip_set:
+        terms_route = RefMapRoute(None, name="ref-map+terms", share=refmap, translator=TermTranslator(reader))
+        log("  ref-map+terms: same references; each question is first translated into technical terms "
+            f"by {reader.model} (one short call per question, counted in its lookup time)")
+        retrievers.append(terms_route)
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
@@ -438,6 +503,20 @@ def main():
                     timing)
     phase_a_s = time.perf_counter() - t_a
     phase_b_s = 0.0
+
+    # ---- optional: why did ref-map miss? (walk vs scoring every reference directly)
+    explain_rows = []
+    if args.explain and refmap is not None:
+        log("\nExplaining ref-map ...")
+        for item in normal:
+            if item.get("generated"):
+                continue
+            ex = refmap.map.explain(item["q"], item["files"])
+            ex["gold"] = item["files"]
+            if terms_route is not None:
+                et = refmap.map.explain(item["q"], item["files"], translator=terms_route.translator)
+                ex["with_terms"] = {k: et[k] for k in ("flat_rank", "walk_rank", "in_chosen", "flat_top", "terms")}
+            explain_rows.append(ex)
 
     # ---- phase B: freshness
     ingest = {}
@@ -541,6 +620,10 @@ def main():
              f"{refmap.map.files_embedded} of {n_files} files embedded on arrival "
              f"({refmap.map.passages_embedded:,} passages); {refmap.map.embed_seconds:.0f}s of embedding in total"]
             if refmap else []),
+          *([f"- ref-map+terms: {terms_route.translator.calls} questions translated, "
+             f"{terms_route.translator.seconds:.0f}s of model time; shares ref-map's references and the "
+             f"files ref-map had already read, so its lookups are a little faster than a cold start"]
+            if terms_route else []),
           *([f"- embed-tree: {etree.tree.files_embedded} of {n_files} files embedded on arrival "
              f"({etree.tree.passages_embedded:,} of {n_chunks:,} passages), "
              f"{etree.tree.embed_seconds:.0f}s of embedding in total"] if etree else []),
@@ -561,21 +644,27 @@ def main():
     if any(r["generated"] for r in rows):
         md.append("_Generated questions often reuse the source passage's wording, which favours "
                   "keyword search. Weigh the hand-written results more._\n")
+    explain_md = explain_report(explain_rows, refmap.map.file_beam if refmap else 6)
+    if explain_md:
+        md.append(explain_md)
     md.append("## Misses (hand-written questions)\n")
     for name in names:
         miss = [r for r in rows if r["retriever"] == name and not r["found"] and not r["generated"]]
         md.append(f"**{name}** ({len(miss)}): " + "; ".join(f"“{r['q']}” → {r['files'][:2]}" for r in miss)
                   + "\n" if miss else f"**{name}**: none\n")
-    (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows), indent=1),
+    (out / "results.json").write_text(json.dumps(dict(meta=meta, summaries=summaries, rows=rows,
+                                                      explain=explain_rows), indent=1, default=str),
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
     log("\n" + "\n".join(md[: 6 + len(ingest) + len(time_lines) + (1 if card_info else 0) + (1 if lazy else 0)
                             + (2 if chain else 0) + (1 if meaning else 0) + (1 if etree else 0)
-                            + (1 if refmap else 0)]))
+                            + (1 if refmap else 0) + (1 if terms_route else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
         if answer_readers:
             log(time_table(s, title))
+    if explain_md:
+        log(explain_md)
     log(f"Full report: {out / 'report.md'}")
 
 

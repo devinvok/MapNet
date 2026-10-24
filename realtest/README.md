@@ -300,3 +300,23 @@ first time), so look at the mean, the slowest lookup and the total. Reader answe
 usually the largest part: every method's passages are answered by every reader. To make a
 run shorter, use `--skip`, `--answer-with` (which methods get answered) or a single
 `--reader-model`.
+
+## Why did ref-map miss? (`--explain`, `ref-map+terms`)
+
+`--explain` adds a section to the report that sorts every ref-map miss into one of two causes.
+The **control** scores each question against every reference directly, with no walk. If the
+control finds the right file but the walk didn't, the walk lost it (the report says whether it
+never entered the right folder, hit the limit on new files read per question, or ranked it too
+low). If the control misses too, the references themselves can't find the page, and the report
+lists the files that keep taking first place for questions they don't answer (magnets).
+
+`ref-map+terms` is the same reference map, but each question is first translated by the small
+model into the technical terms the right page would use ("namespace stuck deleting" ->
+finalizers ...). The translation only routes; the reader never sees it. It shares ref-map's built
+references and the files ref-map had already read, so its lookups look a little faster than a
+cold start. Skip it with `--skip ref-map+terms`.
+
+```
+python -m realtest.run --only concepts,tasks,tutorials,setup --map-model qwen2.5:3b --reader-model qwen2.5:3b --explain --skip map+meaning,map+file-cards,embed-tree,map+lazy-cards
+```
+
