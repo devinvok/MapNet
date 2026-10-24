@@ -17,6 +17,7 @@ Every method sees exactly the same passages of the same files.
 | `map+file-cards` | **The full chain.** Every file also has a one-line description at the folder level, written in advance, so the router can find files nobody has visited yet; sections are mapped on arrival as above, and the file-level decision carries down into passage ranking. Only if you've built file descriptions, see below |
 | `map+meaning` | The chain above, walked by **meaning** as well as words. It embeds the *map*, not the passages: one vector per file up front (its path, description and outline), and a file's sections only when a question first arrives there. At each level the word router's best branches are kept and meaning's best are added, and one of the k passages goes to meaning's first choice, so a weak meaning signal costs little and a good one fixes wrong turns |
 | `map+cards` | ...with every file's sections mapped in advance (only if you've built them, see below) |
+| `ref-map` | **A map of references, DNS style.** Zones hold references, not data: each file's label and description in its own folder's zone, and **each question the model wrote for it registered wherever that question resolves**, next to the closest existing reference to another file. So one file is reachable from several zones (unlike a tree, where each item has one place). Adding a file is resolving its questions, with no rebuild. Restricted files are only referenced inside their own branch. Contents are fetched and embedded only when a question arrives. Needs the file descriptions (`--files-only`) |
 | `embed-tree` | **The map walked by meaning alone, embedded in real time.** It starts with only one short "direction" vector per file (path, headings, description). Folders keep a few representative vectors of what's below them. When the walk arrives at a file it hasn't embedded yet, it embeds that file's passages right then and keeps them, so the map sharpens wherever questions go. It also checks a branch no one has looked inside unless the known branches are clearly better, and looks wider when the match stops rising on the way down. Its embedding cache starts empty each run, so every first visit is real, counted work |
 | `map+embed` | MapNet routes to a wider set of files, embeddings rank the passages inside them |
 
@@ -67,7 +68,22 @@ Apple silicon. These are estimates; your report records the real times.
 The report lands in `realtest/results/<timestamp>/report.md`, with every
 question, retrieved file and answer in `results.json` next to it.
 
-## Testing embed-tree
+## Testing ref-map and embed-tree
+
+Both need `nomic-embed-text`; `ref-map` also needs the file descriptions from
+`python -m mapnet.cards ... --files-only`. Building ref-map embeds about seven
+short texts per file (label, description, five questions) and places each
+question by walking the map; a few minutes on a laptop, counted in the report.
+
+```bash
+python -m realtest.run --only concepts,tasks,tutorials,setup --retrieval-only --skip keyword-all,map,map+sections,map+lazy-cards,map+file-cards,map+meaning
+python -m realtest.run --only concepts,tasks,tutorials,setup --reader-model qwen2.5:7b --skip keyword-all,map,map+sections,map+lazy-cards,map+file-cards,map+meaning --answer-with embed-all,embed-tree,ref-map
+```
+
+The report says how many references were placed outside their file's own
+folder (the multi-homing a tree can't do) and how much was embedded on arrival.
+
+### embed-tree details
 
 Fastest first look, no answers (minutes):
 

@@ -35,7 +35,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from mapnet.cards import CardStore, content_key, make_cards  # noqa: E402
+from mapnet.cards import CardStore, content_key, make_cards, make_file_card  # noqa: E402
 from mapnet.embed import LsaEmbedder, OllamaEmbedder  # noqa: E402
 from mapnet.folder import read_file  # noqa: E402
 from mapnet.meaning import MeaningRouter  # noqa: E402
@@ -44,7 +44,7 @@ from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
-                                 MapEmbed, MapLazy, MapRoute, Shared)
+                                 MapEmbed, MapLazy, MapRoute, RefMapRoute, Shared)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -184,7 +184,7 @@ def main():
     ap.add_argument("--skip", default="", help="comma-separated methods to leave out (saves time)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+meaning,map+cards,map+embed,embed-tree",
+                            "map+meaning,map+cards,map+embed,embed-tree,ref-map",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -346,6 +346,25 @@ def main():
         log(f"  embed-tree: {etree.tree.label_vectors:,} direction vectors (one per file) in "
             f"{time.perf_counter() - t0:.1f}s; file contents embedded only when the walk arrives")
         retrievers.append(etree)
+
+    # the map of references: descriptions + questions, each placed where it resolves
+    refmap = None
+    if "ref-map" not in args.skip:
+        if isinstance(emb, OllamaEmbedder):
+            r_dir = data / "work" / "refmap-cache"  # empty every run: all embedding is counted
+            if r_dir.exists():
+                shutil.rmtree(r_dir)
+            r_emb = OllamaEmbedder(emb.model, cache_dir=str(r_dir))
+        else:
+            r_emb = emb
+        if not store.count_files():
+            log("  ref-map: no file descriptions found, so its only references are paths and headings. "
+                "Build descriptions first: python -m mapnet.cards ... --files-only")
+        refmap = RefMapRoute(Shared(work, cards=HideCards(store, held_texts) if store.count_files() else None),
+                             r_emb, log)
+        log(f"  ref-map: {refmap.map.vectors:,} references ({refmap.map.placed_away:,} placed outside their "
+            f"file's own folder) in {refmap.build_s:.0f}s; file contents embedded only on arrival")
+        retrievers.append(refmap)
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
@@ -381,6 +400,14 @@ def main():
             t0 = time.perf_counter()
             lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited
             ingest["map + lazy cards (mapped later, on first visit)"] = time.perf_counter() - t0
+        if refmap is not None:
+            t0 = time.perf_counter()
+            refmap.s.fm.sync()
+            if have_reader and store.count_files():  # the agent describes each new file on arrival...
+                for f in held:
+                    refmap.s.map.set_file_card(f, make_file_card(read_file(work / f), f, reader))
+            refmap.map.build()  # ...and registers its references where they resolve
+            ingest["ref-map (describe + register the new files)"] = time.perf_counter() - t0
         if etree is not None:
             t0 = time.perf_counter()
             etree.s.fm.sync()
@@ -437,6 +464,11 @@ def main():
              f"(vs {n_chunks:,} passages for embed-all), {meaning.router.seconds:.0f}s"
              + (f"; {meaning.lazy.files} files mapped on first visit" if meaning.lazy else "")]
             if meaning else []),
+          *([f"- ref-map: {refmap.map.vectors:,} references registered "
+             f"({refmap.map.placed_away:,} outside their file's own folder); "
+             f"{refmap.map.files_embedded} of {n_files} files embedded on arrival "
+             f"({refmap.map.passages_embedded:,} passages); {refmap.map.embed_seconds:.0f}s of embedding in total"]
+            if refmap else []),
           *([f"- embed-tree: {etree.tree.files_embedded} of {n_files} files embedded on arrival "
              f"({etree.tree.passages_embedded:,} of {n_chunks:,} passages), "
              f"{etree.tree.embed_seconds:.0f}s of embedding in total"] if etree else []),
@@ -463,7 +495,8 @@ def main():
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
     log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)
-                            + (2 if chain else 0) + (1 if meaning else 0) + (1 if etree else 0)]))
+                            + (2 if chain else 0) + (1 if meaning else 0) + (1 if etree else 0)
+                            + (1 if refmap else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
     log(f"Full report: {out / 'report.md'}")

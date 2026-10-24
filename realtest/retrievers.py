@@ -12,6 +12,8 @@ The contenders. All of them see exactly the same chunks of the same files.
   map+cards     ...with agent-written section cards for every file, made in advance
   map+embed     MapNet routing to a wider set of files, then embedding ranking inside them
   embed-tree    the map walked by meaning alone; each file embedded when the walk first arrives
+  ref-map       a namespace of references (descriptions + questions), each question registered
+                where it resolves; contents fetched and embedded on arrival
 """
 from __future__ import annotations
 
@@ -194,4 +196,26 @@ class EmbedTreeRoute:
 
     def search(self, q, k):
         r = self.tree.search(q, k=k)
+        return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost
+
+
+class RefMapRoute:
+    """ref-map: a namespace of references, DNS style (see mapnet/refmap.py).
+    Entries are the file descriptions and the questions the local model wrote
+    for each file, each question registered wherever it resolves; file
+    contents are embedded only when a question arrives. Its embedding cache
+    starts empty, so all of that work is counted."""
+
+    name = "ref-map"
+
+    def __init__(self, shared, embedder, log=print):
+        from mapnet.refmap import RefMap
+        self.s = shared
+        self.map = RefMap(shared.map, embedder)
+        t0 = time.perf_counter()
+        self.map.build(log)
+        self.build_s = time.perf_counter() - t0
+
+    def search(self, q, k):
+        r = self.map.search(q, k=k)
         return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost
