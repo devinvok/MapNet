@@ -85,10 +85,21 @@ class MeaningRouter:
     def build(self, log=None):
         """Embed the map for every file that isn't embedded yet (or changed)."""
         srcs = self.m.sources()
-        for i, src in enumerate(srcs, 1):
-            self._ensure(src)
-            if log and i % 100 == 0:
-                log(f"    meaning index: {i:,}/{len(srcs):,} files")
+        todo = []
+        for src in srcs:
+            text = self._file_text(src)
+            cur = self._file.get(src.path)
+            if cur is None or cur[0] != text:
+                todo.append((src.path, text))
+        step = 64  # many texts per request: one request per file was ~20x slower
+        for s in range(0, len(todo), step):
+            part = todo[s:s + step]
+            V = self._embed([t for _, t in part])
+            for (path, text), v in zip(part, V):
+                self._file[path] = (text, v)
+            self._version += 1
+            if log and (s // step) % 5 == 4:
+                log(f"    meaning index: {min(s + step, len(todo)):,}/{len(todo):,} files")
         return self.vectors, self.seconds
 
     def _vec(self, node):

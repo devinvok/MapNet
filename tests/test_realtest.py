@@ -130,3 +130,27 @@ def test_evaluate_runs_one_method_at_a_time_and_reports_time():
     assert s["x"]["answer_mean_s"]["m"] == 2.0 and s["x"]["answer_total_s"]["m"] == 4.0
     t = time_table(s, "T")
     assert "Per question (m)" in t and "2." in t
+
+
+def test_embedder_cache_is_not_rewritten_on_every_call(tmp_path):
+    """Saving the whole cache after each call made many small calls quadratic."""
+    import numpy as np
+    from mapnet.embed import OllamaEmbedder
+
+    srv = HTTPServer(("127.0.0.1", 0), FakeOllama)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    host = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        emb = OllamaEmbedder("emb", host=host, cache_dir=str(tmp_path / "c"))
+        saves = []
+        real = emb.save
+        emb.save = lambda: (saves.append(1), real())
+        for i in range(5):
+            emb.embed([f"text number {i}"])
+        assert len(saves) == 1  # the first call saves; the rest wait
+        emb.flush()
+        assert len(saves) == 2
+        again = OllamaEmbedder("emb", host=host, cache_dir=str(tmp_path / "c"))
+        assert len(again._cache) == 5
+    finally:
+        srv.shutdown()

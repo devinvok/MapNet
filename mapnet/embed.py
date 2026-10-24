@@ -10,9 +10,11 @@ an upgrade path for the router).
 """
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import os
+import time
 import urllib.request
 from pathlib import Path
 
@@ -38,6 +40,12 @@ class OllamaEmbedder:
             d = np.load(self.cache_path)
             self._cache = dict(zip(d["keys"].tolist(), d["vecs"]))
         self.name = f"{self.model} (Ollama)"
+        # Rewriting the whole cache file after every call made many small calls quadratic
+        # (1,700 calls x a cache of 25,000+ vectors = ~1.6 s each). Save at most every
+        # `save_every` seconds, and always on exit.
+        self.save_every = 30.0
+        self._dirty, self._saved_at = False, float("-inf")
+        atexit.register(self.flush)
 
     def available(self):
         try:
@@ -66,13 +74,26 @@ class OllamaEmbedder:
             if progress:
                 progress(min(s + self.batch, len(todo)), len(todo))
         if todo and kind == "document":
-            self.save()
+            self._dirty = True
+            if time.monotonic() - self._saved_at >= self.save_every:
+                self.save()
         return _normalize(np.stack([self._cache[k] for k in keys])) if texts else np.zeros((0, 1))
 
     def save(self):
+        if not self._cache:
+            return
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         keys = list(self._cache)
         np.savez(self.cache_path, keys=np.array(keys), vecs=np.stack([self._cache[k] for k in keys]))
+        self._dirty, self._saved_at = False, time.monotonic()
+
+    def flush(self):
+        """Write the cache if anything new is waiting (also runs at exit)."""
+        if self._dirty:
+            try:
+                self.save()
+            except Exception:
+                pass
 
 
 class LsaEmbedder:

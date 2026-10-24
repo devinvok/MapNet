@@ -208,8 +208,14 @@ class RefMap:
         srcs = [s for s in self.m.sources() if self._registered.get(s.path, (None,))[0] != self._signature(s)]
         if not srcs:
             return 0
-        for s in srcs:  # pass 1: everything at home (one batch of embeddings per file)
-            self.register(s, place=False)
+        step = 40  # files per embedding request (many texts at once; a request per file is slow)
+        for a in range(0, len(srcs), step):  # pass 1: everything at home
+            part = srcs[a:a + step]
+            self._embed([t for s in part for _, t in self._claims(s)])  # warms the embedder's cache
+            for s in part:
+                self.register(s, place=False)
+            if log and (a // step) % 5 == 4:
+                log(f"    ref-map: registered {min(a + step, len(srcs)):,}/{len(srcs):,} files")
         # pass 2: move each question to where it resolves (walking against pass 1)
         moved = 0
         for i, s in enumerate(srcs, 1):
