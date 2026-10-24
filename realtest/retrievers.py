@@ -11,6 +11,7 @@ The contenders. All of them see exactly the same chunks of the same files.
                   passages) as well as by words
   map+cards     ...with agent-written section cards for every file, made in advance
   map+embed     MapNet routing to a wider set of files, then embedding ranking inside them
+  embed-tree    the map walked by meaning alone; each file embedded when the walk first arrives
 """
 from __future__ import annotations
 
@@ -175,3 +176,22 @@ class CombinedCards:
 
     def put_file(self, text, card, meta):
         self.sections.put_file(text, card, meta)
+
+
+class EmbedTreeRoute:
+    """embed-tree: the map walked by meaning, each file embedded the first time
+    the walk arrives there (see mapnet/embedtree.py). Starts with only one short
+    label vector per file; its own embedding cache starts empty, so every
+    first-visit embedding is real work and counted in its lookup time."""
+
+    name = "embed-tree"
+
+    def __init__(self, shared, embedder):
+        from mapnet.embedtree import EmbedTree
+        self.s = shared
+        self.tree = EmbedTree(shared.map, embedder)
+        self.tree.build()
+
+    def search(self, q, k):
+        r = self.tree.search(q, k=k)
+        return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost

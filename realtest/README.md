@@ -17,6 +17,7 @@ Every method sees exactly the same passages of the same files.
 | `map+file-cards` | **The full chain.** Every file also has a one-line description at the folder level, written in advance, so the router can find files nobody has visited yet; sections are mapped on arrival as above, and the file-level decision carries down into passage ranking. Only if you've built file descriptions, see below |
 | `map+meaning` | The chain above, walked by **meaning** as well as words. It embeds the *map*, not the passages: one vector per file up front (its path, description and outline), and a file's sections only when a question first arrives there. At each level the word router's best branches are kept and meaning's best are added, and one of the k passages goes to meaning's first choice, so a weak meaning signal costs little and a good one fixes wrong turns |
 | `map+cards` | ...with every file's sections mapped in advance (only if you've built them, see below) |
+| `embed-tree` | **The map walked by meaning alone, embedded in real time.** It starts with only one short "direction" vector per file (path, headings, description). Folders keep a few representative vectors of what's below them. When the walk arrives at a file it hasn't embedded yet, it embeds that file's passages right then and keeps them, so the map sharpens wherever questions go. It also checks a branch no one has looked inside unless the known branches are clearly better, and looks wider when the match stops rising on the way down. Its embedding cache starts empty each run, so every first visit is real, counted work |
 | `map+embed` | MapNet routes to a wider set of files, embeddings rank the passages inside them |
 
 For each it measures: whether the right file is among the passages handed to the
@@ -65,6 +66,29 @@ Apple silicon. These are estimates; your report records the real times.
 
 The report lands in `realtest/results/<timestamp>/report.md`, with every
 question, retrieved file and answer in `results.json` next to it.
+
+## Testing embed-tree
+
+Fastest first look, no answers (minutes):
+
+```bash
+python -m realtest.run --only concepts,tasks,tutorials,setup --retrieval-only --skip keyword-all,map,map+sections,map+lazy-cards,map+file-cards,map+meaning
+```
+
+Then with the 7B reader on the three methods that matter:
+
+```bash
+python -m realtest.run --only concepts,tasks,tutorials,setup --reader-model qwen2.5:7b --skip keyword-all,map,map+sections,map+lazy-cards,map+file-cards,map+meaning --answer-with embed-all,map+embed,embed-tree
+```
+
+The report says how many files embed-tree embedded on the way, out of how many,
+and how long that took. Checked without a real embedding model (stand-in vectors,
+35 questions): flat search over every passage found the right file for 25; the
+fully embedded tree walk for 22 (17 before folders kept several representative
+vectors instead of one average); the real-time walk for 17 on its first pass
+while embedding 128 of 469 files. Before a file is visited, the walk relies on
+its short label, so its accuracy depends on how good those directions are. That
+is what the run with `nomic-embed-text` and your file descriptions measures.
 
 ## Three models, three jobs
 

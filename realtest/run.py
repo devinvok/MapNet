@@ -43,8 +43,8 @@ from mapnet.llm import ExtractiveReader, OllamaReader  # noqa: E402
 from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
-from realtest.retrievers import (CombinedCards, EmbedAll, KeywordAll, MapEmbed, MapLazy,  # noqa: E402
-                                 MapRoute, Shared)
+from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
+                                 MapEmbed, MapLazy, MapRoute, Shared)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -184,7 +184,7 @@ def main():
     ap.add_argument("--skip", default="", help="comma-separated methods to leave out (saves time)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+meaning,map+cards,map+embed",
+                            "map+meaning,map+cards,map+embed,embed-tree",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -329,6 +329,23 @@ def main():
             f"{'; sections mapped on arrival' if meaning.lazy else ''}")
         retrievers.append(meaning)
     retrievers.append(MapEmbed(shared, embed_all))
+
+    # the map walked by meaning, files embedded on arrival, with its own empty cache
+    etree = None
+    if "embed-tree" not in args.skip:
+        if isinstance(emb, OllamaEmbedder):
+            t_dir = data / "work" / "tree-cache"  # empty every run: first visits are real work
+            if t_dir.exists():
+                shutil.rmtree(t_dir)
+            t_emb = OllamaEmbedder(emb.model, cache_dir=str(t_dir))
+        else:
+            t_emb = emb  # stand-in embedder (no Ollama)
+        t_store = HideCards(store, held_texts) if store.count_files() else None
+        t0 = time.perf_counter()
+        etree = EmbedTreeRoute(Shared(work, cards=t_store), t_emb)
+        log(f"  embed-tree: {etree.tree.label_vectors:,} direction vectors (one per file) in "
+            f"{time.perf_counter() - t0:.1f}s; file contents embedded only when the walk arrives")
+        retrievers.append(etree)
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
@@ -364,6 +381,11 @@ def main():
             t0 = time.perf_counter()
             lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited
             ingest["map + lazy cards (mapped later, on first visit)"] = time.perf_counter() - t0
+        if etree is not None:
+            t0 = time.perf_counter()
+            etree.s.fm.sync()
+            etree.tree.build()  # one direction vector per new file; content on first visit
+            ingest["embed-tree (direction vectors for the new files)"] = time.perf_counter() - t0
         if meaning is not None:
             t0 = time.perf_counter()
             meaning.s.fm.sync()
@@ -415,6 +437,9 @@ def main():
              f"(vs {n_chunks:,} passages for embed-all), {meaning.router.seconds:.0f}s"
              + (f"; {meaning.lazy.files} files mapped on first visit" if meaning.lazy else "")]
             if meaning else []),
+          *([f"- embed-tree: {etree.tree.files_embedded} of {n_files} files embedded on arrival "
+             f"({etree.tree.passages_embedded:,} of {n_chunks:,} passages), "
+             f"{etree.tree.embed_seconds:.0f}s of embedding in total"] if etree else []),
           *([f"- Lazy cards: {lazy.lazy.files} files mapped on first visit during the test, "
              f"{lazy.lazy.seconds / 60:.1f} min of model time "
              f"({lazy.lazy.seconds / max(lazy.lazy.files, 1):.0f} s per first visit, included in "
@@ -438,7 +463,7 @@ def main():
                                       encoding="utf-8")
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
     log("\n" + "\n".join(md[: 6 + len(ingest) + (1 if card_info else 0) + (1 if lazy else 0)
-                            + (2 if chain else 0) + (1 if meaning else 0)]))
+                            + (2 if chain else 0) + (1 if meaning else 0) + (1 if etree else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
     log(f"Full report: {out / 'report.md'}")
