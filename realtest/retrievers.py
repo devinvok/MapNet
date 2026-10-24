@@ -14,6 +14,8 @@ The contenders. All of them see exactly the same chunks of the same files.
   embed-tree    the map walked by meaning alone; each file embedded when the walk first arrives
   ref-map       a namespace of references (descriptions + questions), each question registered
                 where it resolves; contents fetched and embedded on arrival
+  ref-map+terms ...with the question first translated into technical terms
+  ref-graph     the same references walked as a navigable graph instead of the folder tree
 """
 from __future__ import annotations
 
@@ -209,12 +211,13 @@ class RefMapRoute:
     name = "ref-map"
 
     def __init__(self, shared, embedder=None, log=print, translator=None, name="ref-map", share=None):
-        """`share`: another RefMapRoute whose built map is reused (the references and the
-        files already read), e.g. for the variant that translates the question first."""
+        """`share`: another RefMapRoute whose references are reused. The variant gets its own
+        record of the files it has read (and, if given, its own embedder), so every variant pays
+        its own first-visit cost and none benefits from another's reading."""
         from mapnet.refmap import RefMap
         self.name, self.translator = name, translator
         if share is not None:
-            self.s, self.map, self.build_s = share.s, share.map, 0.0
+            self.s, self.map, self.build_s = share.s, share.map.fork(embedder), 0.0
             return
         self.s = shared
         self.map = RefMap(shared.map, embedder)
@@ -224,4 +227,24 @@ class RefMapRoute:
 
     def search(self, q, k):
         r = self.map.search(q, k=k, translator=self.translator)
+        return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost
+
+
+class RefGraphRoute:
+    """ref-graph: the same references, walked as a navigable graph instead of the folder tree
+    (see mapnet/refgraph.py). Own record of files read, like every variant."""
+
+    name = "ref-graph"
+
+    def __init__(self, share, embedder=None, translator=None, name="ref-graph", **kw):
+        from mapnet.refgraph import RefGraph
+        self.name, self.translator = name, translator
+        self.s, self.map = share.s, share.map.fork(embedder)
+        self.graph = RefGraph(self.map, **kw)
+        t0 = time.perf_counter()
+        self.graph.sync()
+        self.build_s = time.perf_counter() - t0
+
+    def search(self, q, k):
+        r = self.graph.search(q, k=k, translator=self.translator)
         return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost

@@ -26,6 +26,7 @@ a file (as in embed-tree).
 """
 from __future__ import annotations
 
+import copy
 import re
 import time
 from dataclasses import dataclass
@@ -107,12 +108,33 @@ class RefMap:
         self.refs: dict[int, list[Ref]] = {}       # zone (group node id) -> references
         self._registered: dict[str, tuple] = {}     # target path -> (signature, [(zone id, Ref)])
         self._content: dict[str, tuple] = {}        # target path -> (signature, passage vecs)
-        self._version, self._ex_v, self._ex = 0, -1, {}
+        self._ver = [0]  # shared by forks, so they notice new registrations
+        self._ex_v, self._ex = -1, {}
         self.vectors = 0
         self.files_embedded = 0
         self.passages_embedded = 0
         self.embed_seconds = 0.0
         self.placed_away = 0  # references registered outside their file's own folder
+
+    @property
+    def _version(self):
+        return self._ver[0]
+
+    @_version.setter
+    def _version(self, v):
+        self._ver[0] = v
+
+    def fork(self, embedder=None):
+        """A second reader of the same references with its own record of which files it has
+        read (and, if given, its own embedder), so two ways of searching the same map each pay
+        their own first-visit cost. New registrations in either are seen by both."""
+        f = copy.copy(self)
+        f.emb = embedder or self.emb
+        f._content = {}
+        f._ex, f._ex_v = {}, -1
+        f.files_embedded = f.passages_embedded = 0
+        f.embed_seconds = 0.0
+        return f
 
     # ------------------------------------------------------------ embedding
     def _embed(self, texts, kind="document"):

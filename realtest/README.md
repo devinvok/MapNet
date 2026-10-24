@@ -312,11 +312,27 @@ lists the files that keep taking first place for questions they don't answer (ma
 
 `ref-map+terms` is the same reference map, but each question is first translated by the small
 model into the technical terms the right page would use ("namespace stuck deleting" ->
-finalizers ...). The translation only routes; the reader never sees it. It shares ref-map's built
-references and the files ref-map had already read, so its lookups look a little faster than a
-cold start. Skip it with `--skip ref-map+terms`.
+finalizers ...). The translation only routes; the reader never sees it. Skip it with
+`--skip ref-map+terms`.
+
+`ref-graph` and `ref-graph+terms` use the same references, but walk them as a **navigable graph**
+(`mapnet/refgraph.py`, an HNSW index built from scratch) instead of the folder tree: every
+reference is linked to its nearest neighbours wherever they live, file labels and descriptions sit
+in the upper layers as general hubs, and a question moves from neighbour to closest neighbour with
+a few candidates kept in parallel. A new reference is inserted by walking to where it belongs, and
+there is one graph per access list, so a restricted reference is never linked to a public one.
+
+Every ref-map variant has its **own** record of the files it has read and its own empty embedding
+cache, so each pays its own first-visit cost and none benefits from another's reading. They share
+only the built references (and one translator, so translation time is counted in whichever variant
+ran first). That makes a run with all four variants long; keep it shorter with
+`--answer-with` and `--skip`.
 
 ```
 python -m realtest.run --only concepts,tasks,tutorials,setup --map-model qwen2.5:3b --reader-model qwen2.5:3b --explain --skip map+meaning,map+file-cards,embed-tree,map+lazy-cards
 ```
+A shorter run that compares only what matters for the reference map:
 
+```
+python -m realtest.run --only concepts,tasks,tutorials,setup --map-model qwen2.5:3b --reader-model qwen2.5:3b --explain --skip map+meaning,map+file-cards,embed-tree,map+lazy-cards --answer-with embed-all,map+sections,ref-map,ref-map+terms,ref-graph,ref-graph+terms
+```

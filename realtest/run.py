@@ -45,7 +45,7 @@ from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
-                                 MapEmbed, MapLazy, MapRoute, RefMapRoute, Shared)
+                                 MapEmbed, MapLazy, MapRoute, RefGraphRoute, RefMapRoute, Shared)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -261,6 +261,16 @@ def explain_report(rows, beam=6):
         for r in neither[:8]:
             lines.append(f"- “{r['q']}” → {r['with_terms']['terms'] or '(nothing)'}")
         lines.append("")
+    gr = [r for r in rows if "graph" in r]
+    if gr:
+        line = (f"The graph walk (a navigable graph over the same references, no folders) finds the file for "
+                f"{sum(r['graph']['in_chosen'] for r in gr)} of {len(gr)} questions; the folder walk finds "
+                f"{sum(r['in_chosen'] for r in gr)}; the control {sum(ok(r) for r in gr)}.")
+        if any("with_terms" in r["graph"] for r in gr):
+            line += (f" With the question translated first: graph "
+                     f"{sum(r['graph'].get('with_terms', {}).get('in_chosen', False) for r in gr)}, folder walk "
+                     f"{sum(r.get('with_terms', {}).get('in_chosen', False) for r in gr)}.")
+        lines += [line, ""]
     return "\n".join(lines) + "\n"
 
 
@@ -288,7 +298,7 @@ def main():
                          "walk with scoring every reference directly)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms",
+                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -471,14 +481,35 @@ def main():
         log(f"  ref-map: {refmap.map.vectors:,} references ({refmap.map.placed_away:,} placed outside their "
             f"file's own folder) in {refmap.build_s:.0f}s; file contents embedded only on arrival")
         retrievers.append(refmap)
-    # ref-map, with the question first translated into the technical terms the right page
-    # would use. Shares the built references (and the files already read) with ref-map.
-    terms_route = None
-    if refmap is not None and have_reader and "ref-map+terms" not in skip_set:
-        terms_route = RefMapRoute(None, name="ref-map+terms", share=refmap, translator=TermTranslator(reader))
-        log("  ref-map+terms: same references; each question is first translated into technical terms "
-            f"by {reader.model} (one short call per question, counted in its lookup time)")
-        retrievers.append(terms_route)
+    # Variants of ref-map. Each reads the same references but has its OWN record of the files it
+    # has read and its own empty embedding cache, so every variant pays its own first-visit cost.
+    def fresh_embedder(tag):
+        if not isinstance(emb, OllamaEmbedder):
+            return emb
+        d = data / "work" / f"{tag}-cache"
+        if d.exists():
+            shutil.rmtree(d)
+        return OllamaEmbedder(emb.model, cache_dir=str(d))
+
+    translator = TermTranslator(reader) if have_reader else None
+    terms_route = graph_route = graph_terms_route = None
+    if refmap is not None:
+        if translator and "ref-map+terms" not in skip_set:
+            terms_route = RefMapRoute(None, embedder=fresh_embedder("refmap-terms"), name="ref-map+terms",
+                                      share=refmap, translator=translator)
+            log("  ref-map+terms: same references; each question is first translated into technical terms "
+                f"by {reader.model} (one short call per question, counted in its lookup time)")
+            retrievers.append(terms_route)
+        if "ref-graph" not in skip_set:
+            graph_route = RefGraphRoute(refmap, fresh_embedder("refgraph"))
+            st = graph_route.graph.stats()
+            log(f"  ref-graph: the same references as a navigable graph: {st['nodes']:,} nodes, "
+                f"{st['layers']} layers, {st['groups']} access group(s), built in {graph_route.build_s:.1f}s")
+            retrievers.append(graph_route)
+        if translator and graph_route is not None and "ref-graph+terms" not in skip_set:
+            graph_terms_route = RefGraphRoute(refmap, fresh_embedder("refgraph-terms"), translator=translator,
+                                              name="ref-graph+terms")
+            retrievers.append(graph_terms_route)
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
@@ -516,6 +547,12 @@ def main():
             if terms_route is not None:
                 et = refmap.map.explain(item["q"], item["files"], translator=terms_route.translator)
                 ex["with_terms"] = {k: et[k] for k in ("flat_rank", "walk_rank", "in_chosen", "flat_top", "terms")}
+            if graph_route is not None:
+                g = graph_route.graph.explain(item["q"], item["files"])
+                ex["graph"] = dict(in_chosen=g["in_chosen"], rank=g["rank"])
+                if graph_terms_route is not None:
+                    gt = graph_terms_route.graph.explain(item["q"], item["files"], translator=translator)
+                    ex["graph"]["with_terms"] = dict(in_chosen=gt["in_chosen"], rank=gt["rank"])
             explain_rows.append(ex)
 
     # ---- phase B: freshness
@@ -621,9 +658,14 @@ def main():
              f"({refmap.map.passages_embedded:,} passages); {refmap.map.embed_seconds:.0f}s of embedding in total"]
             if refmap else []),
           *([f"- ref-map+terms: {terms_route.translator.calls} questions translated, "
-             f"{terms_route.translator.seconds:.0f}s of model time; shares ref-map's references and the "
-             f"files ref-map had already read, so its lookups are a little faster than a cold start"]
+             f"{terms_route.translator.seconds:.0f}s of model time; same references as ref-map, but its own "
+             f"record of the files it has read"]
             if terms_route else []),
+          *([f"- ref-graph: {graph_route.graph.stats()['nodes']:,} references linked as a graph "
+             f"({graph_route.graph.stats()['layers']} layers); {graph_route.map.files_embedded} files embedded "
+             f"on arrival ({graph_route.map.passages_embedded:,} passages)"] if graph_route else []),
+          *([f"- ref-map+terms and ref-graph+terms share one translator, so the translation time is "
+             f"counted in whichever of them ran first"] if terms_route and graph_terms_route else []),
           *([f"- embed-tree: {etree.tree.files_embedded} of {n_files} files embedded on arrival "
              f"({etree.tree.passages_embedded:,} of {n_chunks:,} passages), "
              f"{etree.tree.embed_seconds:.0f}s of embedding in total"] if etree else []),
@@ -658,7 +700,8 @@ def main():
     (out / "report.md").write_text("\n".join(md), encoding="utf-8")
     log("\n" + "\n".join(md[: 6 + len(ingest) + len(time_lines) + (1 if card_info else 0) + (1 if lazy else 0)
                             + (2 if chain else 0) + (1 if meaning else 0) + (1 if etree else 0)
-                            + (1 if refmap else 0) + (1 if terms_route else 0)]))
+                            + (1 if refmap else 0) + (1 if terms_route else 0) + (1 if graph_route else 0)
+                            + (1 if terms_route and graph_terms_route else 0)]))
     for title, s in summaries.items():
         log(table(s, title))
         if answer_readers:
