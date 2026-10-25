@@ -24,8 +24,8 @@ the few passages the map points to and write the answer.
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/mapnet.git
-cd mapnet
+git clone https://github.com/galmaron26/walk--and-talk-ai.git
+cd walk--and-talk-ai
 pip install -r requirements.txt
 
 # a small local model (optional: without it you get the best passage instead of an answer)
