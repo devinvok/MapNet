@@ -145,7 +145,28 @@ See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for a 2-minute recorded demo plan
 | 23,040 | 98.7% | 99.7% | 23,040 | 297 |
 | 92,160 | 92.7% | **98.7%** | 92,160 | **575** |
 
-Honest caveats, all detailed in [research/README.md](research/README.md):
+**Real documents (`realtest/`)**, 469 Kubernetes docs (concepts, tasks, tutorials, setup),
+35 hand-written questions, retrieval only, 4 passages per question, `nomic-embed-text`
+for embeddings and `qwen2.5:3b` writing the file descriptions:
+
+| Method | Right file in top 4 | MRR | Median lookup |
+|---|---|---|---|
+| Embedding search over every passage | **80%** | 0.63 | 2.1 s |
+| ref-map (references + folder walk) | 54% | 0.48 | 11.7 s |
+| ref-map + question translation | 60% | 0.55 | 16.6 s |
+| ref-graph (same references, graph walk) | 57% | 0.49 | 11.6 s |
+| ref-graph + question translation | 63% | 0.56 | 13.7 s |
+
+The honest reading: on this set, plain embedding search over everything finds the right
+file more often than any of the reference-based variants. Scoring the question against
+every reference directly, with no walk at all, also misses 12 of the 35, so the shortfall
+comes from what the small model wrote in the file descriptions, not from the walk. What the
+map offers instead is permission-aware routing, files that are answerable the moment they
+are added, and reading a file only when a question reaches it. Whether better descriptions
+close the accuracy gap is the open question. Full tables and the failure analysis are in
+`realtest/results/` after a run.
+
+Honest caveats for the synthetic benchmark, all detailed in [research/README.md](research/README.md):
 the data is synthetic; when routing takes a wrong turn the answer is never seen
 (flat search at least ranks it lower), so low-confidence queries should fall back
 to a wider search; and on one machine a flat search is still faster in clock time,
@@ -161,12 +182,19 @@ mapnet/
   folder.py      keeps the map in sync with a folder (polling watcher, .access files)
   notes.py       agent notes: pointer-only, verified, scoped, self-cleaning
   llm.py         readers: Ollama (local), Anthropic (cloud, for comparison), no-model fallback
+  cards.py       section cards and one-line file descriptions written by a local model
+  embed.py       Ollama embedding client with an on-disk cache
+  meaning.py     walks the map by meaning as well as words
+  embedtree.py   the map walked by embeddings, embedded on arrival
+  refmap.py      a namespace of references (DNS style), with question-to-term translation
+  refgraph.py    the same references as a navigable graph (HNSW, built from scratch)
   assistant.py   the full loop: notes -> map -> reader -> leave a note
   synthetic.py   synthetic company generator for the benchmark
 ask.py           interactive CLI
 agents_demo.py   agents leaving trail markers + safety checks
 compare.py       local vs cloud comparison, including live updates
 examples/        a fictional company's documents, files to drop in, question set
+realtest/        the real-data test: 1,700 Kubernetes docs, hand-written questions, baselines
 research/        scale benchmark, results and the synthetic walkthrough
 tests/           pytest suite (runs without any model or network)
 ```
@@ -185,8 +213,9 @@ tests/           pytest suite (runs without any model or network)
 ## Roadmap
 
 - [x] Real-data test harness (`realtest/`) with embedding-search baseline and freshness test
-- [ ] Run it with real models and publish the results
-- [ ] Small embedding model as the router encoder
+- [x] Run it with real models and publish the results (first run above)
+- [x] Small embedding model as the router encoder (`nomic-embed-text`)
+- [ ] Close the accuracy gap to embedding search on real documents (better file descriptions, page-level vectors)
 - [ ] Fallback to a wider search when routing confidence is low
 - [ ] Remote sources (MCP servers) so the map spans machines, DNS-style
 - [ ] Signed note authorship and per-agent reputation
