@@ -336,3 +336,18 @@ A shorter run that compares only what matters for the reference map:
 ```
 python -m realtest.run --only concepts,tasks,tutorials,setup --map-model qwen2.5:3b --reader-model qwen2.5:3b --explain --skip map+meaning,map+file-cards,embed-tree,map+lazy-cards --answer-with embed-all,map+sections,ref-map,ref-map+terms,ref-graph,ref-graph+terms
 ```
+
+## The token network (`token-net`, `token-net+assoc`, `token-net+sections`)
+
+`mapnet/tokennet.py`: a network of **tokens** (whole words and identifiers: `maxSurge` gives
+`maxsurge`, `max`, `surge`; crude stemming) with an edge from each token to every passage that
+contains it, weighted BM25 (a rare token is a specific name, a common one is generic). No model, no
+embeddings, built in about a second, updated live. `token-net+assoc` also lights up the words the
+documents themselves associate with each question word (they turn up in the same passages far more
+than chance; computed on demand). `token-net+sections` merges the token network with `map+sections`
+by reciprocal rank. All three need no Ollama, so they can be measured anywhere:
+
+```
+python -m realtest.run --only concepts,tasks,tutorials,setup --retrieval-only --skip map+meaning,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms,map+lazy-cards,map+file-cards
+```
+
