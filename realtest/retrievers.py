@@ -16,6 +16,8 @@ The contenders. All of them see exactly the same chunks of the same files.
                 where it resolves; contents fetched and embedded on arrival
   ref-map+terms ...with the question first translated into technical terms
   ref-graph     the same references walked as a navigable graph instead of the folder tree
+  page-mean     one vector per file (the mean of its passage vectors); best files first, then passages
+  page-text     one vector per file made from the page's own text; passages embedded on arrival
 """
 from __future__ import annotations
 
@@ -291,8 +293,11 @@ class TokenFusion:
 
     name = "token-net+sections"
 
-    def __init__(self, net_route, sections_route, depth=20, c=60):
+    def __init__(self, net_route, sections_route, depth=20, c=60, name=None):
+        """`sections_route` can be any other route: the merge is the same (token-net+page-mean,
+        token-net+embed-all)."""
         self.a, self.b, self.depth, self.c = sections_route, net_route, depth, c
+        self.name = name or self.name
 
     def search(self, q, k):
         score, by, cost = {}, {}, 0
@@ -305,3 +310,21 @@ class TokenFusion:
                 by[key] = h
         best = sorted(score, key=lambda x: -score[x])[:k]
         return [(by[x][0], by[x][1], score[x]) for x in best], cost
+
+
+class PageMapRoute:
+    """page-mean / page-text: each file represented by a vector made from its own text instead
+    of a model-written description (see mapnet/pagemap.py). Own embedding cache, so all the
+    embedding work is counted."""
+
+    def __init__(self, shared, embedder, mode="mean", name=None, **kw):
+        from mapnet.pagemap import PageMap
+        self.s, self.name = shared, name or f"page-{mode}"
+        self.map = PageMap(shared.map, embedder, mode=mode, **kw)
+        t0 = time.perf_counter()
+        self.map.sync()
+        self.build_s = time.perf_counter() - t0
+
+    def search(self, q, k):
+        r = self.map.search(q, k=k)
+        return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost

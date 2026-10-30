@@ -45,8 +45,8 @@ from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
-                                 MapEmbed, MapLazy, MapRoute, RefGraphRoute, RefMapRoute, Shared,
-                                 TokenFusion, TokenNetRoute)
+                                 MapEmbed, MapLazy, MapRoute, PageMapRoute, RefGraphRoute, RefMapRoute,
+                                 Shared, TokenFusion, TokenNetRoute)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -299,7 +299,9 @@ def main():
                          "walk with scoring every reference directly)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms,token-net,token-net+assoc,token-net+sections",
+                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms,"
+                            "token-net,token-net+assoc,token-net+sections,page-mean,page-text,"
+                            "token-net+page-mean,token-net+embed-all",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -526,6 +528,21 @@ def main():
             graph_terms_route = RefGraphRoute(refmap, fresh_embedder("refgraph-terms"), translator=translator,
                                               name="ref-graph+terms")
             retrievers.append(graph_terms_route)
+    # page vectors: a file is represented by its own text, not by a model-written description
+    page_routes = []
+    for mode in ("mean", "text"):
+        if f"page-{mode}" not in skip_set:
+            pr = PageMapRoute(Shared(work), fresh_embedder(f"page-{mode}"), mode=mode)
+            log(f"  page-{mode}: {len(pr.map.page):,} page vectors in {pr.build_s:.0f}s "
+                f"({pr.map.passages_embedded:,} passages embedded up front)")
+            page_routes.append(pr)
+            retrievers.append(pr)
+    # hybrids: the token network (words, model-free) merged with an embedding method by rank
+    if tnet is not None:
+        for other, name in (("page-mean", "token-net+page-mean"), ("embed-all", "token-net+embed-all")):
+            route = next((r for r in retrievers if r.name == other), None)
+            if route is not None and name not in skip_set:
+                retrievers.append(TokenFusion(tnet, route, name=name))
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
@@ -598,6 +615,11 @@ def main():
                     refmap.s.map.set_file_card(f, make_file_card(read_file(work / f), f, reader))
             refmap.map.build()  # ...and registers its references where they resolve
             ingest["ref-map (describe + register the new files)"] = time.perf_counter() - t0
+        for pr in page_routes:
+            t0 = time.perf_counter()
+            pr.s.fm.sync()
+            pr.map.sync()  # embeds the new files (page vector; passages too in mean mode)
+            ingest[f"{pr.name} (embed the new files)"] = time.perf_counter() - t0
         if etree is not None:
             t0 = time.perf_counter()
             etree.s.fm.sync()
@@ -684,6 +706,9 @@ def main():
              f"on arrival ({graph_route.map.passages_embedded:,} passages)"] if graph_route else []),
           *([f"- ref-map+terms and ref-graph+terms share one translator, so the translation time is "
              f"counted in whichever of them ran first"] if terms_route and graph_terms_route else []),
+          *(f"- {pr.name}: {len(pr.map.page):,} page vectors; {pr.map.files_embedded} files and "
+            f"{pr.map.passages_embedded:,} of {n_chunks:,} passages embedded, {pr.map.embed_seconds:.0f}s of "
+            f"embedding in total" for pr in page_routes),
           *([f"- embed-tree: {etree.tree.files_embedded} of {n_files} files embedded on arrival "
              f"({etree.tree.passages_embedded:,} of {n_chunks:,} passages), "
              f"{etree.tree.embed_seconds:.0f}s of embedding in total"] if etree else []),
