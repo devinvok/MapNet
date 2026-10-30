@@ -46,7 +46,7 @@ from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
                                  MapEmbed, MapLazy, MapRoute, PageMapRoute, RefGraphRoute, RefMapRoute,
-                                 Shared, TokenFusion, TokenNetRoute)
+                                 Shared, TokenFusion, TokenGraphRoute, TokenNetRoute, TokenWinRoute)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -301,7 +301,9 @@ def main():
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
                             "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms,"
                             "token-net,token-net+assoc,token-net+sections,page-mean,page-text,"
-                            "token-net+page-mean,token-net+embed-all",
+                            "token-net+page-mean,token-net+embed-all,token-prox,token-window,"
+                            "token-prox+window,token-prox+window+page-mean,token-graph,token-graph+prox,token-graph+page-mean,"
+                            "token-conv-window,token-conv-graph,token-conv-graph2",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -464,6 +466,34 @@ def main():
             sec_route = next(r for r in retrievers if r.name == "map+sections")
             retrievers.append(TokenFusion(tnet, sec_route))
 
+    # the token network with positions: proximity of the question's words, and the words beside them
+    twin = None
+    win_variants = (("token-prox", True, False, {}), ("token-window", False, True, {}),
+                    ("token-prox+window", True, True, {}),
+                    ("token-conv-window", False, True, dict(converge=2, link_n=20)))
+    for name, prox, expand, skw in win_variants:
+        if name in skip_set:
+            continue
+        twin = TokenWinRoute(shared, prox=prox, expand=expand, name=name, share=twin, search_kw=skw)
+        if twin.build_s:
+            log(f"  token positions: {len(twin.net.vocab):,} tokens, window {twin.net.window}, "
+                f"built in {twin.build_s:.1f}s (no model)")
+        retrievers.append(twin)
+
+    # question words light up the words used in the same contexts (vectors from the embedding index)
+    tgraph = None
+    for name, prox, skw in (("token-graph", False, {}), ("token-graph+prox", True, {}),
+                            ("token-conv-graph", False, dict(converge=2, link_n=20)),
+                            ("token-conv-graph2", False, dict(converge=2, hops=2, link_n=20))):
+        if name in skip_set:
+            continue
+        tgraph = TokenGraphRoute(shared, lambda ids: embed_all.M[[embed_all.index[d] for d in ids]],
+                                 prox=prox, name=name, share=tgraph, search_kw=skw)
+        if tgraph.build_s:
+            log(f"  token-graph: word vectors from the embedding index's passage vectors; "
+                f"{len(tgraph.net.vocab):,} words")
+        retrievers.append(tgraph)
+
     # the map walked by meaning, files embedded on arrival, with its own empty cache
     etree = None
     if "embed-tree" not in skip_set:
@@ -543,6 +573,14 @@ def main():
             route = next((r for r in retrievers if r.name == other), None)
             if route is not None and name not in skip_set:
                 retrievers.append(TokenFusion(tnet, route, name=name))
+    tg = next((r for r in retrievers if r.name == "token-graph"), None)
+    pm0 = next((r for r in retrievers if r.name == "page-mean"), None)
+    if tg is not None and pm0 is not None and "token-graph+page-mean" not in skip_set:
+        retrievers.append(TokenFusion(tg, pm0, name="token-graph+page-mean"))
+    pw = next((r for r in retrievers if r.name == "token-prox+window"), None)
+    pm = next((r for r in retrievers if r.name == "page-mean"), None)
+    if pw is not None and pm is not None and "token-prox+window+page-mean" not in skip_set:
+        retrievers.append(TokenFusion(pw, pm, name="token-prox+window+page-mean"))
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     retrievers = [r for r in retrievers if r.name not in skip]
     names = [r.name for r in retrievers]
@@ -603,6 +641,10 @@ def main():
         ingest["embedding index"] = embed_all.add(new)
         if tnet is not None:
             ingest["token-net (add the new files)"] = tnet.sync()
+        if twin is not None:
+            ingest["token positions (add the new files)"] = twin.sync()
+        if tgraph is not None:
+            ingest["token-graph (add the new files)"] = tgraph.sync()
         if lazy is not None:
             t0 = time.perf_counter()
             lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited

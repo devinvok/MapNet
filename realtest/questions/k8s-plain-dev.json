@@ -1,0 +1,1570 @@
+[
+ {
+  "q": "What term describes a feature that a computer in a network can announce it has, to help manage different software versions and ensure everything works well together?",
+  "answer": "A declarable feature is a term used to describe a feature that a computer can announce it has, to help manage different software versions and ensure everything works well together.",
+  "key": "declarable",
+  "files": [
+   "concepts/scheduling-eviction/node-declared-features.md"
+  ],
+  "passage": "concepts/scheduling-eviction/node-declared-features.md#2",
+  "expect": [
+   "declarable"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When you create a new go program to connect your cloud service with Kubernetes, what function do you need to call to make sure your cloud service is recognized by the Kubernetes system?",
+  "answer": "You need to call the RegisterCloudProvider function to make sure your cloud service is recognized by the Kubernetes system.",
+  "key": "RegisterCloudProvider",
+  "files": [
+   "tasks/administer-cluster/developing-cloud-controller-manager.md"
+  ],
+  "passage": "tasks/administer-cluster/developing-cloud-controller-manager.md#2",
+  "expect": [
+   "registercloudprovider"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is the name of the plugin that ensures multiple groups of Pods are scheduled together for AI workloads, like making sure all the necessary parts of a project are completed before starting the next one?",
+  "answer": "GangScheduling is the name of the plugin that ensures multiple groups of Pods are scheduled together for AI workloads, like making sure all the necessary parts of a project are completed before starting the next one.",
+  "key": "GangScheduling",
+  "files": [
+   "concepts/scheduling-eviction/gang-scheduling.md"
+  ],
+  "passage": "concepts/scheduling-eviction/gang-scheduling.md#9",
+  "expect": [
+   "gangscheduling"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I know how to use Linux containers, will my experience with Windows containers be similar or different, and why might they be different?",
+  "answer": "Windows containers might be different because they are based on a different operating system than Linux-based containers.",
+  "key": "Linux-based",
+  "files": [
+   "concepts/windows/intro.md"
+  ],
+  "passage": "concepts/windows/intro.md#4",
+  "expect": [
+   "linux\\-based"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What should the list look like in the file where network rules are set for Windows Pods to allow connections to external resources?",
+  "answer": "ExceptionList should be a list in the network configuration file that allows connections to external resources for Windows Pods.",
+  "key": "ExceptionList",
+  "files": [
+   "tasks/debug/debug-cluster/windows.md"
+  ],
+  "passage": "tasks/debug/debug-cluster/windows.md#3",
+  "expect": [
+   "exceptionlist"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to run specific tests on my computer to check if it can work with Kubernetes nodes, but I don\u2019t want to run the network test. How do I do that, and what\u2019s the command I need to use for this?",
+  "answer": "You can use the node-test command to run specific tests and skip the network test.",
+  "key": "node-test",
+  "files": [
+   "setup/best-practices/node-conformance.md"
+  ],
+  "passage": "setup/best-practices/node-conformance.md#3",
+  "expect": [
+   "node\\-test"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I create a list of servers that my application should use, do I need to create a special resource directly, or will the system handle it automatically?",
+  "answer": "You need to create a special resource directly if you want your application to use a user-created list of servers.",
+  "key": "user-created",
+  "files": [
+   "concepts/services-networking/endpoint-slices.md"
+  ],
+  "passage": "concepts/services-networking/endpoint-slices.md#13",
+  "expect": [
+   "user\\-created"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What command checks if the file I downloaded is safe and matches what it's supposed to be?",
+  "answer": "The command 'sha256sum --check' verifies if the downloaded file matches the expected hash, ensuring its safety.",
+  "key": "sha256sum",
+  "files": [
+   "tasks/tools/install-kubectl-linux.md"
+  ],
+  "passage": "tasks/tools/install-kubectl-linux.md#15",
+  "expect": [
+   "sha256sum"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to apply a security setting that restricts what a container can do but I don't specify a custom profile, which type will the system use instead?",
+  "answer": "If you don't specify a custom profile, the system will use a pre-loaded security setting.",
+  "key": "pre-loaded",
+  "files": [
+   "tutorials/security/apparmor.md"
+  ],
+  "passage": "tutorials/security/apparmor.md#16",
+  "expect": [
+   "pre\\-loaded"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If a storage space is no longer needed and the process of removing it from the system is required, what is this action called in Kubernetes?",
+  "answer": "The action is called de-provisioning.",
+  "key": "de-provisioning",
+  "files": [
+   "concepts/storage/windows-storage.md"
+  ],
+  "passage": "concepts/storage/windows-storage.md#4",
+  "expect": [
+   "de\\-provisioning"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I organize tasks that run only once and those that run on a schedule without using complex lists?",
+  "answer": "Use simple_list to organize tasks that run only once and those that run on a schedule.",
+  "key": "simple_list",
+  "files": [
+   "concepts/workloads/controllers/_index.md"
+  ],
+  "passage": "concepts/workloads/controllers/_index.md#4",
+  "expect": [
+   "simple_list"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "In a Kubernetes cluster, how does a device ensure it is attached to the correct node before it can be used by a pod? For example, if I want a specific GPU to always be available on a particular node, what should I do?",
+  "answer": "The term 'bindsToNode' ensures that a device is attached to the correct node before it can be used by a pod.",
+  "key": "bindsToNode",
+  "files": [
+   "concepts/resource-management/dynamic-resource-allocation/how-dra-works.md"
+  ],
+  "passage": "concepts/resource-management/dynamic-resource-allocation/how-dra-works.md#13",
+  "expect": [
+   "bindstonode"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I have a big garden and I want to grow different types of flowers without them mixing up, how can I organize my garden to keep certain areas for specific flowers while still using the same space?",
+  "answer": "You can use different sections of your garden, like subsections, to grow specific types of flowers separately.",
+  "key": "subsection",
+  "files": [
+   "tutorials/cluster-management/namespaces-walkthrough.md"
+  ],
+  "passage": "tutorials/cluster-management/namespaces-walkthrough.md#0",
+  "expect": [
+   "subsection"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to group my apps for easier management, so I add a label to a service. What should I use if I want to show that this service is part of a bigger application called 'website'?",
+  "answer": "You should use the label 'app.part-of: website' to indicate that this service is part of the bigger application called 'website'.",
+  "key": "part-of",
+  "files": [
+   "concepts/overview/working-with-objects/common-labels.md"
+  ],
+  "passage": "concepts/overview/working-with-objects/common-labels.md#7",
+  "expect": [
+   "part\\-of"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What happens if a person tries to add a sidecar to a Pod that already has a similar helper container included by the user?",
+  "answer": "If a person tries to add a sidecar to a Pod that already has a similar helper container included by the user-provided Pod, the webhook might inject the same sidecar multiple times.",
+  "key": "user-provided",
+  "files": [
+   "concepts/cluster-administration/admission-webhooks-good-practices.md"
+  ],
+  "passage": "concepts/cluster-administration/admission-webhooks-good-practices.md#41",
+  "expect": [
+   "user\\-provided"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I don't want my app to run on a server that doesn't have a specific software, what should I set to true in the software's settings?",
+  "answer": "You should set the preventPodSchedulingIfMissing field to true.",
+  "key": "preventPodSchedulingIfMissing",
+  "files": [
+   "concepts/storage/storage-limits.md"
+  ],
+  "passage": "concepts/storage/storage-limits.md#7",
+  "expect": [
+   "preventpodschedulingifmissing"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is a unique identifier for each computer that Kubernetes uses to tell them apart in a group?",
+  "answer": "Kubernetes uses product_uuid as a unique identifier for each computer in a group.",
+  "key": "product_uuid",
+  "files": [
+   "setup/production-environment/tools/kubeadm/install-kubeadm.md"
+  ],
+  "passage": "setup/production-environment/tools/kubeadm/install-kubeadm.md#5",
+  "expect": [
+   "product_uuid"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I set up my computer to get new security keys and update my digital ID before they expire without manual intervention?",
+  "answer": "You can enable the rotate-certificates feature to automatically request new security keys and update your digital ID before they expire.",
+  "key": "rotate-certificates",
+  "files": [
+   "tasks/tls/certificate-rotation.md"
+  ],
+  "passage": "tasks/tls/certificate-rotation.md#1",
+  "expect": [
+   "rotate\\-certificates"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How does a system keep trying to reach a certain goal without stopping?",
+  "answer": "A non-terminating process keeps trying until the goal is reached.",
+  "key": "non-terminating",
+  "files": [
+   "concepts/architecture/controller.md"
+  ],
+  "passage": "concepts/architecture/controller.md#0",
+  "expect": [
+   "non\\-terminating"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is the name of the tool that checks if the right person is approving certificate requests before they are finalized?",
+  "answer": "CertificateApproval",
+  "key": "CertificateApproval",
+  "files": [
+   "concepts/security/security-checklist.md"
+  ],
+  "passage": "concepts/security/security-checklist.md#34",
+  "expect": [
+   "certificateapproval"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What happens when a Service is deleted but the related cloud resources aren't removed, leading to leftover resources in the cloud?",
+  "answer": "What happens is that leftover resources in the cloud can become a problem when a Service is deleted but the related cloud resources aren't removed, creating a situation with leftover corners.",
+  "key": "corner",
+  "files": [
+   "tasks/access-application-cluster/create-external-load-balancer.md"
+  ],
+  "passage": "tasks/access-application-cluster/create-external-load-balancer.md#8",
+  "expect": [
+   "corner"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I ensure that each group of tasks runs with the correct rules without affecting other groups that are already running?",
+  "answer": "Each group of tasks should be designed to run with the correct rules in a self-contained manner.",
+  "key": "self-contained",
+  "files": [
+   "concepts/workloads/workload-api/policies.md"
+  ],
+  "passage": "concepts/workloads/workload-api/policies.md#3",
+  "expect": [
+   "self\\-contained"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to learn about how to schedule jobs in Kubernetes, but I\u2019m not sure where to start. Can you tell me which version of the API I should look at for job scheduling?",
+  "answer": "You should look at the schedulingv1 API for job scheduling.",
+  "key": "schedulingv1",
+  "files": [
+   "concepts/workloads/workload-api/workloadbuilder.md"
+  ],
+  "passage": "concepts/workloads/workload-api/workloadbuilder.md#22",
+  "expect": [
+   "schedulingv1"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How do you add a temporary helper to an existing app to check its status and run some tests without affecting the main application?",
+  "answer": "You add a helper by describing it with the same ContainerSpec as regular containers, but with some restrictions.",
+  "key": "ContainerSpec",
+  "files": [
+   "concepts/workloads/pods/ephemeral-containers.md"
+  ],
+  "passage": "concepts/workloads/pods/ephemeral-containers.md#1",
+  "expect": [
+   "containerspec"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When someone tries to access a Kubernetes cluster, what do these tools that check if they are allowed to do so and also find out which group they belong to, if any, get called?",
+  "answer": "These tools get called authenticators.",
+  "key": "authenticators",
+  "files": [
+   "concepts/security/controlling-access.md"
+  ],
+  "passage": "concepts/security/controlling-access.md#4",
+  "expect": [
+   "authenticators"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to update my cluster to a newer version, but it's still using old package sources. What do I need to do before upgrading?",
+  "answer": "Before upgrading, you need to switch to new community-owned package sources.",
+  "key": "community-owned",
+  "files": [
+   "tasks/administer-cluster/kubeadm/change-package-repository.md"
+  ],
+  "passage": "tasks/administer-cluster/kubeadm/change-package-repository.md#1",
+  "expect": [
+   "community\\-owned"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is the URL that links to a specific item within a list of resources in Kubernetes? This URL is used to uniquely identify and access each resource.",
+  "answer": "The selfLink is the URL that uniquely identifies and allows you to access a specific resource within a list of resources in Kubernetes.",
+  "key": "selfLink",
+  "files": [
+   "tasks/extend-kubernetes/custom-resources/custom-resource-definitions.md"
+  ],
+  "passage": "tasks/extend-kubernetes/custom-resources/custom-resource-definitions.md#7",
+  "expect": [
+   "selflink"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to adjust the memory settings for a pod without stopping its operation, but I\u2019m not sure if my Kubernetes version supports this. What feature do I need to enable first?",
+  "answer": "You need to enable the InPlacePodLevelResourcesVerticalScaling feature to adjust the memory settings for a pod without stopping its operation.",
+  "key": "InPlacePodLevelResourcesVerticalScaling",
+  "files": [
+   "tasks/configure-pod-container/assign-pod-level-resources.md"
+  ],
+  "passage": "tasks/configure-pod-container/assign-pod-level-resources.md#4",
+  "expect": [
+   "inplacepodlevelresourcesverticalscaling"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to set up a reliable Kubernetes cluster with separate servers for managing the cluster and storing data, what process involves organizing these servers into groups?",
+  "answer": "Clustering involves organizing servers into groups for managing and storing data in a Kubernetes cluster.",
+  "key": "Clustering",
+  "files": [
+   "setup/production-environment/tools/kubeadm/ha-topology.md"
+  ],
+  "passage": "setup/production-environment/tools/kubeadm/ha-topology.md#0",
+  "expect": [
+   "clustering"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What happens when some pods in a group go down, and I want to ensure that other related pods also shut down to maintain system integrity?",
+  "answer": "Fate-sharing ensures that when some pods in a group go down, other related pods also shut down to maintain system integrity.",
+  "key": "fate-sharing",
+  "files": [
+   "concepts/workloads/podgroup-api/_index.md"
+  ],
+  "passage": "concepts/workloads/podgroup-api/_index.md#13",
+  "expect": [
+   "fate\\-sharing"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to know more about the changes to how containers handle IDs in Kubernetes 1.14, specifically the part that was updated in April 2019. Can you tell me the code name for that update?",
+  "answer": "The code name for that update is b4d8276bc9564e56adf72505d43ce9bc5e9e8.",
+  "key": "b4d8276bc9564e56adf72505d43ce9bc5e9e8",
+  "files": [
+   "concepts/policy/pid-limiting.md"
+  ],
+  "passage": "concepts/policy/pid-limiting.md#9",
+  "expect": [
+   "b4d8276bc9564e56adf72505d43ce9bc5e9e8"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to run some pods that use extra memory when they run out, but I'm not sure how to set that up. What do I need to configure in the kubelet settings?",
+  "answer": "You need to configure the memorySwap setting to allow pods to use extra memory when they run out.",
+  "key": "memorySwap",
+  "files": [
+   "tutorials/cluster-management/provision-swap-memory.md"
+  ],
+  "passage": "tutorials/cluster-management/provision-swap-memory.md#5",
+  "expect": [
+   "memoryswap"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What special permission allows a user to update resource claims across different nodes in a multi-node Kubernetes cluster, and how is it used in the example?",
+  "answer": "The special permission used is 'arbitrary-node', which allows updating resource claims across different nodes in the cluster.",
+  "key": "arbitrary-node",
+  "files": [
+   "concepts/security/hardening-guide/dynamic-resource-allocation.md"
+  ],
+  "passage": "concepts/security/hardening-guide/dynamic-resource-allocation.md#6",
+  "expect": [
+   "arbitrary\\-node"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "In Kubernetes, when adding a custom condition to a Pod, what do you need to specify to define the type of that condition?",
+  "answer": "You need to specify the conditionType to define the type of that condition.",
+  "key": "conditionType",
+  "files": [
+   "concepts/workloads/pods/pod-condition.md"
+  ],
+  "passage": "concepts/workloads/pods/pod-condition.md#21",
+  "expect": [
+   "conditiontype"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I ensure that only certain types of tasks run on specific machines in my computer cluster, without manually assigning each task?",
+  "answer": "Administrators can use the node-labeller to automatically tag nodes with specific features, ensuring that only pods requesting those features are scheduled on the appropriate machines.",
+  "key": "node-labeller",
+  "files": [
+   "tasks/manage-gpus/scheduling-gpus.md"
+  ],
+  "passage": "tasks/manage-gpus/scheduling-gpus.md#5",
+  "expect": [
+   "node\\-labeller"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What could cause a job to not be cleaned up automatically after it finishes, and how might this affect setting a time limit for job cleanup?",
+  "answer": "Clocks might not always be perfectly synchronized, which could affect how a time limit for job cleanup is handled.",
+  "key": "Clocks",
+  "files": [
+   "concepts/workloads/controllers/ttlafterfinished.md"
+  ],
+  "passage": "concepts/workloads/controllers/ttlafterfinished.md#6",
+  "expect": [
+   "clocks"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I run Kubernetes without needing special permissions or using Cgroup v2, and still have it work properly inside a container?",
+  "answer": "Sysbox allows you to run Kubernetes inside a container without needing special permissions or Cgroup v2.",
+  "key": "Sysbox",
+  "files": [
+   "tasks/administer-cluster/kubelet-in-userns.md"
+  ],
+  "passage": "tasks/administer-cluster/kubelet-in-userns.md#5",
+  "expect": [
+   "sysbox"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When creating new rules for a system, what attitude should you take to avoid problems when the system updates?",
+  "answer": "You should take a thoughtfully approach to avoid issues when the system updates.",
+  "key": "Thoughtfully",
+  "files": [
+   "concepts/security/_index.md"
+  ],
+  "passage": "concepts/security/_index.md#4",
+  "expect": [
+   "thoughtfully"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I check if the software I downloaded is safe and matches what the developers provided? I heard it involves checking some kind of list or document they create. What do they call this list?",
+  "answer": "The list they create is called a Materials list.",
+  "key": "Materials",
+  "files": [
+   "tasks/administer-cluster/verify-signed-artifacts.md"
+  ],
+  "passage": "tasks/administer-cluster/verify-signed-artifacts.md#6",
+  "expect": [
+   "materials"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to make sure my API group is up-to-date, but there's a version that's marked as deprecated. Which version should I avoid using?",
+  "answer": "You should avoid using the v1beta3 version.",
+  "key": "v1beta3",
+  "files": [
+   "concepts/cluster-administration/flow-control.md"
+  ],
+  "passage": "concepts/cluster-administration/flow-control.md#2",
+  "expect": [
+   "v1beta3"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How do I specify which version of the application to revert to when I want to go back to a previous setup in Kubernetes?",
+  "answer": "You need to use the --to-revision flag with the kubectl rollout undo command to specify which version to revert to.",
+  "key": "to-revision",
+  "files": [
+   "tasks/manage-daemon/rollback-daemon-set.md"
+  ],
+  "passage": "tasks/manage-daemon/rollback-daemon-set.md#2",
+  "expect": [
+   "to\\-revision"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "After I started the application, how long did it take for it to become available?",
+  "answer": "It took 2m21s for the application to become available.",
+  "key": "m21s",
+  "files": [
+   "tasks/access-application-cluster/port-forward-access-application-cluster.md"
+  ],
+  "passage": "tasks/access-application-cluster/port-forward-access-application-cluster.md#1",
+  "expect": [
+   "m21s"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "In a tree-like structure used to organize workloads, what term describes a node that has child nodes under it?",
+  "answer": "A node that has child nodes under it is called a non-leaf node.",
+  "key": "non-leaf",
+  "files": [
+   "concepts/workloads/compositepodgroup-api/_index.md"
+  ],
+  "passage": "concepts/workloads/compositepodgroup-api/_index.md#0",
+  "expect": [
+   "non\\-leaf"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What are the objects that tell the Kubernetes cluster which nodes can use a specific storage type and how much of that storage is available?",
+  "answer": "CSIStorageCapacity objects tell the Kubernetes cluster which nodes can use a specific storage type and how much of that storage is available.",
+  "key": "CSIStorageCapacity",
+  "files": [
+   "concepts/storage/storage-capacity.md"
+  ],
+  "passage": "concepts/storage/storage-capacity.md#2",
+  "expect": [
+   "csistoragecapacity"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What specific page in the Kubernetes docs talks about keeping secrets safe on Windows nodes?",
+  "answer": "The page about windows-security does this.",
+  "key": "windows-security",
+  "files": [
+   "concepts/security/windows-security.md"
+  ],
+  "passage": "concepts/security/windows-security.md#0",
+  "expect": [
+   "windows\\-security"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up a service that stores data, but I'm not sure what file I should use to define how this service should be accessed by other parts of my application. What should I look for?",
+  "answer": "You should look for the file named redis-service, which defines how the service storing data can be accessed by other components.",
+  "key": "redis-service",
+  "files": [
+   "tasks/job/fine-parallel-processing-work-queue.md"
+  ],
+  "passage": "tasks/job/fine-parallel-processing-work-queue.md#3",
+  "expect": [
+   "redis\\-service"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When I check the IP address for the Kubernetes service that exposes the API server, what kind of object is used to manage this IP address?",
+  "answer": "An IPAddress object is used to manage this IP address.",
+  "key": "IPAddress",
+  "files": [
+   "tasks/network/extend-service-ip-ranges.md"
+  ],
+  "passage": "tasks/network/extend-service-ip-ranges.md#1",
+  "expect": [
+   "ipaddress"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When I try to delete a deployment, why does it stay in the system for a while before actually removing all the associated resources?",
+  "answer": "This happens because of the foregroundDeletion mechanism, which ensures that all related resources are cleaned up before the deployment itself is removed.",
+  "key": "foregroundDeletion",
+  "files": [
+   "tasks/administer-cluster/use-cascading-deletion.md"
+  ],
+  "passage": "tasks/administer-cluster/use-cascading-deletion.md#4",
+  "expect": [
+   "foregrounddeletion"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is the name of the list that contains information about multiple pods in Kubernetes, including their names and namespaces?",
+  "answer": "PodList is the name of the list that contains information about multiple pods in Kubernetes, including their names and namespaces.",
+  "key": "PodList",
+  "files": [
+   "tasks/extend-kubernetes/http-proxy-access-api.md"
+  ],
+  "passage": "tasks/extend-kubernetes/http-proxy-access-api.md#2",
+  "expect": [
+   "podlist"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "Kubernetes was originally designed to work with a specific container tool, but now it can use different tools. Why was this the case?",
+  "answer": "Historically, Kubernetes was designed to work with a specific container tool.",
+  "key": "Historically",
+  "files": [
+   "tasks/administer-cluster/migrating-from-dockershim/migrating-telemetry-and-security-agents.md"
+  ],
+  "passage": "tasks/administer-cluster/migrating-from-dockershim/migrating-telemetry-and-security-agents.md#1",
+  "expect": [
+   "historically"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to automate the process of deploying updates to my application and monitor them without manual steps. What tool can help me with this?",
+  "answer": "Flux can help you automate the deployment and monitoring of your application updates.",
+  "key": "Flux",
+  "files": [
+   "tutorials/stateless-application/canary-deployment.md"
+  ],
+  "passage": "tutorials/stateless-application/canary-deployment.md#22",
+  "expect": [
+   "flux"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to run a container that needs the newer version of cgroups, what should the output show when I check the cgroup version on my Linux system?",
+  "answer": "The output should show 'cgroup2fs'.",
+  "key": "cgroup2fs",
+  "files": [
+   "concepts/architecture/cgroups.md"
+  ],
+  "passage": "concepts/architecture/cgroups.md#9",
+  "expect": [
+   "cgroup2fs"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What unique code is used to identify the machine in this Kubernetes cluster setup?",
+  "answer": "The unique code used to identify the machine in this Kubernetes cluster setup is e2927f544209b5d7b67474bbf92b.",
+  "key": "e2927f544209b5d7b67474bbf92b",
+  "files": [
+   "tasks/debug/debug-cluster/_index.md"
+  ],
+  "passage": "tasks/debug/debug-cluster/_index.md#6",
+  "expect": [
+   "e2927f544209b5d7b67474bbf92b"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up a Kubernetes cluster on Google Cloud, but I'm not sure what command to use to enable network policies. What tool should I use for this task?",
+  "answer": "You should use gcloud to enable network policies when creating your Kubernetes cluster on Google Cloud.",
+  "key": "gcloud",
+  "files": [
+   "tasks/administer-cluster/network-policy-provider/calico-network-policy.md"
+  ],
+  "passage": "tasks/administer-cluster/network-policy-provider/calico-network-policy.md#0",
+  "expect": [
+   "gcloud"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I make small changes to a running application without stopping it, and what are the rules for doing so?",
+  "answer": "Patch-operations allow you to make targeted changes to a running application's configuration without stopping it, following specific rules for modifying fields.",
+  "key": "patch-operations",
+  "files": [
+   "tasks/manage-kubernetes-objects/imperative-command.md"
+  ],
+  "passage": "tasks/manage-kubernetes-objects/imperative-command.md#5",
+  "expect": [
+   "patch\\-operations"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "The main Kubernetes API server can manage built-in resources like pods and services, but how does it handle custom resources provided by other servers?",
+  "answer": "The main Kubernetes API server can manage built-in resources like pods and services, but it can also handle custom resources provided by other servers generically.",
+  "key": "generically",
+  "files": [
+   "concepts/extend-kubernetes/api-extension/custom-resources.md"
+  ],
+  "passage": "concepts/extend-kubernetes/api-extension/custom-resources.md#16",
+  "expect": [
+   "generically"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What tool was used to create the visual representation showing how Kubernetes can be extended?",
+  "answer": "The tool used to create the visual representation showing how Kubernetes can be extended is drawings.",
+  "key": "drawings",
+  "files": [
+   "concepts/extend-kubernetes/_index.md"
+  ],
+  "passage": "concepts/extend-kubernetes/_index.md#8",
+  "expect": [
+   "drawings"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How are the groups and pods organized in this system when creating them from a template?",
+  "answer": "They are organized in a top-down manner, starting from the root template and moving downwards to create the groups and pods.",
+  "key": "top-down",
+  "files": [
+   "concepts/workloads/compositepodgroup-api/lifecycle.md"
+  ],
+  "passage": "concepts/workloads/compositepodgroup-api/lifecycle.md#2",
+  "expect": [
+   "top\\-down"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is a way an attacker could use to manipulate how work gets scheduled on nodes in a Kubernetes cluster, potentially evicting other workloads?",
+  "answer": "An attacker could use a Yo-Yo attack to manipulate the scheduler and evict other workloads from nodes.",
+  "key": "Yo-Yo",
+  "files": [
+   "concepts/security/hardening-guide/scheduler.md"
+  ],
+  "passage": "concepts/security/hardening-guide/scheduler.md#0",
+  "expect": [
+   "yo\\-yo"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to find a way to store information about different parts of my application without spending too much money. Which tool should I use for this purpose?",
+  "answer": "You should use Grafana Tempo for this purpose, as it offers scalable, low-cost distributed tracing storage.",
+  "key": "low-cost",
+  "files": [
+   "concepts/cluster-administration/observability.md"
+  ],
+  "passage": "concepts/cluster-administration/observability.md#17",
+  "expect": [
+   "low\\-cost"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When the kubelet wants to know what optional features a plugin can provide, what does it need to do first?",
+  "answer": "The kubelet needs to call GetDevicePluginOptions first to find out what optional features are available.",
+  "key": "GetDevicePluginOptions",
+  "files": [
+   "concepts/extend-kubernetes/compute-storage-net/device-plugins.md"
+  ],
+  "passage": "concepts/extend-kubernetes/compute-storage-net/device-plugins.md#9",
+  "expect": [
+   "getdevicepluginoptions"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If someone gets hold of my private key for a client certificate, what can they do, and how can I prevent this issue?",
+  "answer": "To prevent this issue, your private key for client certificate authentication cannot be password-protected.",
+  "key": "password-protected",
+  "files": [
+   "concepts/security/hardening-guide/authentication-mechanisms.md"
+  ],
+  "passage": "concepts/security/hardening-guide/authentication-mechanisms.md#2",
+  "expect": [
+   "password\\-protected"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What happens when a container uses more memory than it was allocated, and the system needs to free up space urgently?",
+  "answer": "When a container uses more memory than it was allocated and the system needs to free up space urgently, oom-kills occur, which means the system kills the container to release memory.",
+  "key": "oom-kills",
+  "files": [
+   "tasks/configure-pod-container/resize-container-resources.md"
+  ],
+  "passage": "tasks/configure-pod-container/resize-container-resources.md#14",
+  "expect": [
+   "oom\\-kills"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I get my pod's name inside a container as an environment variable or a file?",
+  "answer": "You can use downwardapi-fieldRef to get your pod's name inside a container as an environment variable or a file.",
+  "key": "downwardapi-fieldRef",
+  "files": [
+   "concepts/workloads/pods/downward-api.md"
+  ],
+  "passage": "concepts/workloads/pods/downward-api.md#2",
+  "expect": [
+   "downwardapi\\-fieldref"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I delete a pod and it doesn't stop immediately, what happens next?",
+  "answer": "Irrespective of whether the pod stops right away, it will be removed from the list of available pods.",
+  "key": "Irrespective",
+  "files": [
+   "tasks/run-application/force-delete-stateful-set-pod.md"
+  ],
+  "passage": "tasks/run-application/force-delete-stateful-set-pod.md#6",
+  "expect": [
+   "irrespective"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What method helps track changes, is good for working with configuration files, and integrates with software version control systems like Git?",
+  "answer": "GitOps helps track changes, is good for working with configuration files, and integrates with software version control systems like Git.",
+  "key": "GitOps",
+  "files": [
+   "concepts/overview/kubectl.md"
+  ],
+  "passage": "concepts/overview/kubectl.md#6",
+  "expect": [
+   "gitops"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What policy should I set if I want to manage how the Kubernetes nodes handle memory pressure by reserving specific amounts for the system and applications?",
+  "answer": "You should set the memoryManagerPolicy to Static to manage how the nodes handle memory pressure by reserving specific amounts for the system and applications.",
+  "key": "memoryManagerPolicy",
+  "files": [
+   "tasks/administer-cluster/memory-manager.md"
+  ],
+  "passage": "tasks/administer-cluster/memory-manager.md#18",
+  "expect": [
+   "memorymanagerpolicy"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If you want to use a version that's more experimental than v1 but not the very latest one, which version would you choose and why?",
+  "answer": "You would choose v10beta3 because it's more experimental than v1 but not as new as v11alpha2 or v12alpha1.",
+  "key": "v10beta3",
+  "files": [
+   "tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning.md"
+  ],
+  "passage": "tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning.md#16",
+  "expect": [
+   "v10beta3"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up a Kubernetes cluster automatically, but I don't know where to start. What tool should I use for this?",
+  "answer": "You should use kOps for automatically setting up a Kubernetes cluster.",
+  "key": "kOps",
+  "files": [
+   "setup/production-environment/tools/_index.md"
+  ],
+  "passage": "setup/production-environment/tools/_index.md#0",
+  "expect": [
+   "kops"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "How can I mount a file from my computer into a container and then read it using a simple command?",
+  "answer": "You can use image-volumes to mount files from your computer into a container and then read them using commands like cat.",
+  "key": "image-volumes",
+  "files": [
+   "tasks/configure-pod-container/image-volumes.md"
+  ],
+  "passage": "tasks/configure-pod-container/image-volumes.md#1",
+  "expect": [
+   "image\\-volumes"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What condition indicates whether the system can adjust the number of running instances based on the workload?",
+  "answer": "AbleToScale indicates whether the system can adjust the number of running instances based on the workload.",
+  "key": "AbleToScale",
+  "files": [
+   "tasks/run-application/horizontal-pod-autoscale-walkthrough.md"
+  ],
+  "passage": "tasks/run-application/horizontal-pod-autoscale-walkthrough.md#28",
+  "expect": [
+   "abletoscale"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When setting up services for applications in a Kubernetes cluster, what do I need to understand first to know how the source IP works for different types of services?",
+  "answer": "You need to understand the Terminology first to know how source IP works for different types of services.",
+  "key": "Terminology",
+  "files": [
+   "tutorials/services/source-ip.md"
+  ],
+  "passage": "tutorials/services/source-ip.md#0",
+  "expect": [
+   "terminology"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to run a container that needs some space to store temporary files. The container will stop after running for a while. What should I use to provide this storage space, and what is it called in this context?",
+  "answer": "You should use a scratch-volume to provide the storage space for your container.",
+  "key": "scratch-volume",
+  "files": [
+   "concepts/storage/ephemeral-volumes.md"
+  ],
+  "passage": "concepts/storage/ephemeral-volumes.md#10",
+  "expect": [
+   "scratch\\-volume"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When setting up a new server in a data center, what does the system use to decide which rack the server should be placed in to ensure it works well with nearby servers?",
+  "answer": "The system uses the PlacementGeneratePlugin to decide which rack the server should be placed in.",
+  "key": "PlacementGeneratePlugin",
+  "files": [
+   "concepts/scheduling-eviction/topology-aware-scheduling.md"
+  ],
+  "passage": "concepts/scheduling-eviction/topology-aware-scheduling.md#1",
+  "expect": [
+   "placementgenerateplugin"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "Why does the list start with a zero instead of one, and what could going out of sync with this affect?",
+  "answer": "Going out of sync with this numbering could affect understanding the steps in the correct order.",
+  "key": "numbering",
+  "files": [
+   "tasks/configure-pod-container/migrate-from-psp.md"
+  ],
+  "passage": "tasks/configure-pod-container/migrate-from-psp.md#2",
+  "expect": [
+   "numbering"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I create a new job in a different namespace, which namespace will the job be created in?",
+  "answer": "The job will be created in the some-ns namespace.",
+  "key": "some-ns",
+  "files": [
+   "concepts/workloads/workload-api/_index.md"
+  ],
+  "passage": "concepts/workloads/workload-api/_index.md#5",
+  "expect": [
+   "some\\-ns"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What can allow a web server to run on a node that doesn't meet its specific requirements? If a node isn't configured to run a particular type of application, how can you still deploy it there?",
+  "answer": "Tolerations_ can allow a web server to run on a node that doesn't meet its specific requirements.",
+  "key": "Tolerations_",
+  "files": [
+   "concepts/workloads/pods/advanced-pod-config.md"
+  ],
+  "passage": "concepts/workloads/pods/advanced-pod-config.md#13",
+  "expect": [
+   "tolerations_"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When trying to evict a pod, what name was used in the example to create an eviction object?",
+  "answer": "The name used in the example to create an eviction object was 'quux'.",
+  "key": "quux",
+  "files": [
+   "concepts/scheduling-eviction/api-eviction.md"
+  ],
+  "passage": "concepts/scheduling-eviction/api-eviction.md#1",
+  "expect": [
+   "quux"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When I create a new device on my computer, how does the system ensure that the same settings are applied to the copy of the device that appears in the cloud?",
+  "answer": "The system propagates the settings from the device on the computer to the copy of the device in the cloud.",
+  "key": "propagates",
+  "files": [
+   "concepts/workloads/pods/static-pods.md"
+  ],
+  "passage": "concepts/workloads/pods/static-pods.md#2",
+  "expect": [
+   "propagates"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to run a service that needs to be as fast as possible on some of my computers. How should I describe the storage on those computers so that my program only runs there?",
+  "answer": "You should describe the storage as having low-latency.",
+  "key": "low-latency",
+  "files": [
+   "tasks/manage-daemon/pods-some-nodes.md"
+  ],
+  "passage": "tasks/manage-daemon/pods-some-nodes.md#0",
+  "expect": [
+   "low\\-latency"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is the term used to track why a change was made to a deployment, if someone wants to know the reason behind each update?",
+  "answer": "CHANGE-CAUSE is used to track why a change was made to a deployment, if someone wants to know the reason behind each update.",
+  "key": "CHANGE-CAUSE",
+  "files": [
+   "tasks/run-application/update-deployment-rolling.md"
+  ],
+  "passage": "tasks/run-application/update-deployment-rolling.md#11",
+  "expect": [
+   "change\\-cause"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When you delete a group of similar items, like deleting a batch of books from a library, what process ensures that all related items, such as copies or related notes, are also removed at the same time?",
+  "answer": "Foreground-deletion ensures that all related items are removed at the same time when you delete a group of similar items.",
+  "key": "foreground-deletion",
+  "files": [
+   "concepts/architecture/garbage-collection.md"
+  ],
+  "passage": "concepts/architecture/garbage-collection.md#6",
+  "expect": [
+   "foreground\\-deletion"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to make my application available both inside and outside my network. If I choose ClusterIP, will it be enough to meet my needs?",
+  "answer": "No, ClusterIP will only make the Service reachable inside the network, but choosing NodePort will be a Superset that also allows access from outside.",
+  "key": "Superset",
+  "files": [
+   "tutorials/kubernetes-basics/expose/expose-intro.md"
+  ],
+  "passage": "tutorials/kubernetes-basics/expose/expose-intro.md#4",
+  "expect": [
+   "superset"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What kind of drivers must be used so that devices can be managed by a system that allocates them to containers based on resource needs?",
+  "answer": "DRA-compatible drivers must be used so that devices can be managed by a system that allocates them to containers based on resource needs.",
+  "key": "DRA-compatible",
+  "files": [
+   "concepts/resource-management/dynamic-resource-allocation/_index.md"
+  ],
+  "passage": "concepts/resource-management/dynamic-resource-allocation/_index.md#3",
+  "expect": [
+   "dra\\-compatible"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When updating a custom resource definition, what do you specify to tell the system which versions of the resource should be converted during the update process?",
+  "answer": "You specify conversionReviewVersions to indicate which versions of the resource should be converted during the update process.",
+  "key": "conversionReviewVersions",
+  "files": [
+   "tasks/manage-kubernetes-objects/storage-version-migration.md"
+  ],
+  "passage": "tasks/manage-kubernetes-objects/storage-version-migration.md#13",
+  "expect": [
+   "conversionreviewversions"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What number would you expect to see if everything is working correctly when you check how many times a container has restarted after making changes to its resources?",
+  "answer": "You would expect to see restartCount as 0 if everything is working correctly after making changes to a container's resources.",
+  "key": "restartCount",
+  "files": [
+   "tasks/configure-pod-container/resize-pod-resources.md"
+  ],
+  "passage": "tasks/configure-pod-container/resize-pod-resources.md#10",
+  "expect": [
+   "restartcount"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to ensure some important tasks on my computer can finish before it turns off, how long should I set for these tasks to complete during a power outage or shutdown? This setting is called ____________.",
+  "answer": "shutdownGracePeriodCriticalPods",
+  "key": "shutdownGracePeriodCriticalPods",
+  "files": [
+   "concepts/cluster-administration/node-shutdown.md"
+  ],
+  "passage": "concepts/cluster-administration/node-shutdown.md#8",
+  "expect": [
+   "shutdowngraceperiodcriticalpods"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is it when you manually choose a node for a pod to run instead of letting the scheduler decide?",
+  "answer": "It's unusual to manually pick a node for a pod.",
+  "key": "unusual",
+  "files": [
+   "concepts/scheduling-eviction/kube-scheduler.md"
+  ],
+  "passage": "concepts/scheduling-eviction/kube-scheduler.md#2",
+  "expect": [
+   "unusual"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to make sure that traffic from my app running in one server stays on that same server. What setting should I use for my service to achieve this?",
+  "answer": "You should use the 'internal-only' setting for your service.",
+  "key": "internal-only",
+  "files": [
+   "concepts/services-networking/service-traffic-policy.md"
+  ],
+  "passage": "concepts/services-networking/service-traffic-policy.md#0",
+  "expect": [
+   "internal\\-only"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to see the webpage running on the container, but I'm not sure what command to use to check the port it's using. What should I look for in the output?",
+  "answer": "You should look for the http-port 8080 in the output.",
+  "key": "http-port",
+  "files": [
+   "tutorials/hello-minikube.md"
+  ],
+  "passage": "tutorials/hello-minikube.md#6",
+  "expect": [
+   "http\\-port"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "Where should I install kind and kubectl to set up a Kubernetes cluster for practice?",
+  "answer": "You should install kind and kubectl on your personal computer or laptop, which is called a workstation.",
+  "key": "workstation",
+  "files": [
+   "tutorials/security/cluster-level-pss.md"
+  ],
+  "passage": "tutorials/security/cluster-level-pss.md#1",
+  "expect": [
+   "workstation"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What kind of networking plugin and NetworkPolicy setup is needed for the described pod lifecycle behavior to work properly?",
+  "answer": "For the described pod lifecycle behavior to work properly, a conformant networking plugin and NetworkPolicy setup are needed.",
+  "key": "conformant",
+  "files": [
+   "concepts/services-networking/network-policies.md"
+  ],
+  "passage": "concepts/services-networking/network-policies.md#25",
+  "expect": [
+   "conformant"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to ensure that some resources are left for Kubernetes system tasks, but I\u2019m not sure how to set it up. What should I configure to reserve resources for Kubernetes system daemons?",
+  "answer": "You should configure the kubeReservedCgroup setting to reserve resources for Kubernetes system daemons.",
+  "key": "kubeReservedCgroup",
+  "files": [
+   "tasks/administer-cluster/reserve-compute-resources.md"
+  ],
+  "passage": "tasks/administer-cluster/reserve-compute-resources.md#4",
+  "expect": [
+   "kubereservedcgroup"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to create a new application pod that will replace the old one when updated, but I\u2019m not sure what setting I need to configure to make sure this happens. What should I set?",
+  "answer": "You need to set the StrategyType to Recreate so that the old pod is replaced when you update.",
+  "key": "StrategyType",
+  "files": [
+   "tasks/run-application/run-single-instance-stateful-application.md"
+  ],
+  "passage": "tasks/run-application/run-single-instance-stateful-application.md#2",
+  "expect": [
+   "strategytype"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "In the example, what term is used to describe the part of the message that shows great respect before someone's name, like 'The Most Honorable John Doe'?",
+  "answer": "HONORIFIC is the term used to describe the part of the message that shows great respect before someone's name, like 'The Most Honorable John Doe'.",
+  "key": "HONORIFIC",
+  "files": [
+   "tasks/inject-data-application/define-environment-variable-container.md"
+  ],
+  "passage": "tasks/inject-data-application/define-environment-variable-container.md#4",
+  "expect": [
+   "honorific"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to ensure that my application always gets whole processors and not just parts of them, what setting should I use for the CPUManager policy options?",
+  "answer": "You should use the full-pcpus setting for the CPUManager policy options.",
+  "key": "full-pcpus",
+  "files": [
+   "tasks/administer-cluster/cpu-management-policies.md"
+  ],
+  "passage": "tasks/administer-cluster/cpu-management-policies.md#13",
+  "expect": [
+   "full\\-pcpus"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When an application writes to the console, what does that allow for, and what's a limitation of this approach?",
+  "answer": "When an application writes to the console, that allows for debugging and monitoring, but Likewise, this approach has limitations.",
+  "key": "Likewise",
+  "files": [
+   "concepts/cluster-administration/logging.md"
+  ],
+  "passage": "concepts/cluster-administration/logging.md#0",
+  "expect": [
+   "likewise"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What is the encoded form of the password that gets stored in the Secret object when you apply the manifest to your cluster?",
+  "answer": "YmlyZHNhcmVudHJlYWw",
+  "key": "YmlyZHNhcmVudHJlYWw",
+  "files": [
+   "tasks/configmap-secret/managing-secret-using-config-file.md"
+  ],
+  "passage": "tasks/configmap-secret/managing-secret-using-config-file.md#8",
+  "expect": [
+   "ymlyzhnhcmvudhjlyww"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to use a newer version of Kubernetes to act like an older version, what must I set to match or be less than the newer version's number?",
+  "answer": "You must set the binaryVersion to match or be less than the newer version's number.",
+  "key": "binaryVersion",
+  "files": [
+   "concepts/cluster-administration/compatibility-version.md"
+  ],
+  "passage": "concepts/cluster-administration/compatibility-version.md#1",
+  "expect": [
+   "binaryversion"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to run my applications securely on servers, should I use a regular operating system or a custom one that only includes necessary services for containers?",
+  "answer": "You should use a custom image_ that only includes necessary services for containers.",
+  "key": "image_",
+  "files": [
+   "concepts/security/cloud-native-security.md"
+  ],
+  "passage": "concepts/security/cloud-native-security.md#11",
+  "expect": [
+   "image_"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want the system to store the login details based on the user's account rather than for each specific task, what should I set it to?",
+  "answer": "You should set it to per-service.",
+  "key": "per-service",
+  "files": [
+   "tasks/administer-cluster/kubelet-credential-provider.md"
+  ],
+  "passage": "tasks/administer-cluster/kubelet-credential-provider.md#20",
+  "expect": [
+   "per\\-service"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to add extra information to a Kubernetes object that isn't used for selecting objects, and I use a key like 'purpose', what would I put as the value for that key to describe it as a development environment?",
+  "answer": "value2",
+  "key": "value2",
+  "files": [
+   "concepts/overview/working-with-objects/annotations.md"
+  ],
+  "passage": "concepts/overview/working-with-objects/annotations.md#1",
+  "expect": [
+   "value2"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to send logs directly to a backend service without using a collector, what does that do to the need for a collector in my setup?",
+  "answer": "That negates the need for a collector in your setup.",
+  "key": "negates",
+  "files": [
+   "concepts/cluster-administration/system-traces.md"
+  ],
+  "passage": "concepts/cluster-administration/system-traces.md#2",
+  "expect": [
+   "negates"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up network policies for my Kubernetes cluster, but I\u2019m not sure which tool to use. Can you recommend one that works well with kubeadm?",
+  "answer": "Antrea is a good choice for setting up network policies with kubeadm.",
+  "key": "Antrea",
+  "files": [
+   "tasks/administer-cluster/network-policy-provider/antrea-network-policy.md"
+  ],
+  "passage": "tasks/administer-cluster/network-policy-provider/antrea-network-policy.md#0",
+  "expect": [
+   "antrea"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up a local cluster to test some ideas, but I'm not sure how to start and stop it easily. What should I do when I'm done with my tests?",
+  "answer": "You should tear down the cluster to clean up resources.",
+  "key": "tear",
+  "files": [
+   "setup/learning-environment/_index.md"
+  ],
+  "passage": "setup/learning-environment/_index.md#1",
+  "expect": [
+   "tear"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to ensure my application runs only on Windows nodes with a specific version of Windows. How can I specify which version of Windows the pod should run on?",
+  "answer": "You can specify the version of Windows by adding a label like `node.kubernetes.io/windows-build: '10.0.20348'` to the nodeSelector.",
+  "key": "windows-build",
+  "files": [
+   "concepts/windows/user-guide.md"
+  ],
+  "passage": "concepts/windows/user-guide.md#15",
+  "expect": [
+   "windows\\-build"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "If I want to create a custom storage solution for my Kubernetes cluster, how much control do I have over where I host the code and how I run it?",
+  "answer": "You have a lot of discretion over where you host the code and how you run it.",
+  "key": "discretion",
+  "files": [
+   "concepts/storage/volume-attributes-classes.md"
+  ],
+  "passage": "concepts/storage/volume-attributes-classes.md#4",
+  "expect": [
+   "discretion"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "What feature allows the scheduler to try and free up space by moving other pods when a group of new pods can't be placed where they're needed?",
+  "answer": "WorkloadAwarePreemption allows the scheduler to try and free up space by moving other pods when a group of new pods can't be placed where they're needed.",
+  "key": "WorkloadAwarePreemption",
+  "files": [
+   "concepts/scheduling-eviction/workload-aware-preemption.md"
+  ],
+  "passage": "concepts/scheduling-eviction/workload-aware-preemption.md#0",
+  "expect": [
+   "workloadawarepreemption"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "In a group of coworkers who are working on a project together, if one person needs to take charge of a task, how would you describe the other people who are working on the same project?",
+  "answer": "The other people are the peers who are working alongside the person taking charge.",
+  "key": "peers",
+  "files": [
+   "concepts/architecture/leases.md"
+  ],
+  "passage": "concepts/architecture/leases.md#9",
+  "expect": [
+   "peers"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up a secure way for people outside my company to access my application running on Kubernetes, but I don't want to manage a lot of configuration. What tool can help me achieve this with minimal setup?",
+  "answer": "Skipper can help you set up secure access with minimal configuration.",
+  "key": "Skipper",
+  "files": [
+   "concepts/services-networking/ingress-controllers.md"
+  ],
+  "passage": "concepts/services-networking/ingress-controllers.md#7",
+  "expect": [
+   "skipper"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "I want to set up a service account in my namespace to allow it to make certain requests, but I'm not sure which role to use to let it ask the main Kubernetes server if it has permission to do so. What should I use?",
+  "answer": "You should use the auth-delegator role to allow your service account to ask the main Kubernetes server if it has permission to make certain requests.",
+  "key": "auth-delegator",
+  "files": [
+   "tasks/extend-kubernetes/setup-extension-api-server.md"
+  ],
+  "passage": "tasks/extend-kubernetes/setup-extension-api-server.md#3",
+  "expect": [
+   "auth\\-delegator"
+  ],
+  "generated": true,
+  "plain": true
+ },
+ {
+  "q": "When a user tries to visit a website, how does the system figure out which IP address to connect to for that website?",
+  "answer": "The system learns which IP address to connect to for that website.",
+  "key": "learns",
+  "files": [
+   "concepts/services-networking/gateway.md"
+  ],
+  "passage": "concepts/services-networking/gateway.md#14",
+  "expect": [
+   "learns"
+  ],
+  "generated": true,
+  "plain": true
+ }
+]

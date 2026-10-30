@@ -286,6 +286,42 @@ class TokenNetRoute:
         return [(_file(d), t, sc) for d, t, sc in hits], cost
 
 
+class TokenWinRoute(TokenNetRoute):
+    """token-prox / token-window / token-prox+window: the token network with positions (see
+    mapnet/tokenwin.py). prox re-ranks by how tightly the question's words cluster; expand also
+    lights up the words that sit right beside each question word across the corpus."""
+
+    def __init__(self, shared, prox=True, expand=True, name="token-prox+window", share=None,
+                 search_kw=None, **kw):
+        from mapnet.tokenwin import PosTokenNet
+        self.s, self.name, self.assoc = shared, name, False
+        self.prox, self.expand, self.search_kw = prox, expand, dict(search_kw or {})
+        self.net = share.net if share is not None else PosTokenNet(**kw)
+        self.build_s = 0.0
+        if share is None:
+            self.sync()
+
+    def search(self, q, k):
+        hits, cost = self.net.search(q, k=k, prox=self.prox, expand=self.expand, **self.search_kw)
+        return [(_file(d), t, sc) for d, t, sc in hits], cost
+
+
+class TokenGraphRoute(TokenWinRoute):
+    """token-graph: question words light up the words used in the same contexts (word vectors made
+    from the passage vectors the embedding index already holds, see mapnet/tokengraph.py), and the
+    light flows to the passages containing them. `vectors(doc_ids)` returns the passage matrix."""
+
+    def __init__(self, shared, vectors, prox=False, expand=True, name="token-graph", share=None,
+                 search_kw=None, **kw):
+        from mapnet.tokengraph import TokenGraph
+        self.s, self.name, self.assoc = shared, name, False
+        self.prox, self.expand, self.search_kw = prox, expand, dict(search_kw or {})
+        self.net = share.net if share is not None else TokenGraph(vectors, **kw)
+        self.build_s = 0.0
+        if share is None:
+            self.sync()
+
+
 class TokenFusion:
     """token-net+sections: the token network and the folder map with section walk, each asked for
     its best passages, merged by reciprocal rank (c=60). No model. The two fail on different
