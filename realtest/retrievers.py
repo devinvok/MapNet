@@ -248,3 +248,60 @@ class RefGraphRoute:
     def search(self, q, k):
         r = self.graph.search(q, k=k, translator=self.translator)
         return [(_file(h.doc_id), h.text, h.score) for h in r.hits], r.cost
+
+
+class TokenNetRoute:
+    """token-net: a network of tokens pointing at the passages that contain them (see
+    mapnet/tokennet.py). No model, no embeddings. With assoc=True each question word also lights
+    up the words the documents themselves associate with it."""
+
+    def __init__(self, shared, assoc=False, name="token-net", share=None):
+        from mapnet.tokennet import TokenNet
+        self.s, self.name, self.assoc = shared, name, assoc
+        self.net = share.net if share is not None else TokenNet()
+        self.build_s = 0.0
+        if share is None:
+            self.sync()
+
+    def sync(self):
+        """Make the network match the folder map: add new or changed passages, drop gone ones."""
+        t0 = time.perf_counter()
+        keep = set()
+        for src in self.s.map.sources():
+            for i, d in enumerate(src.doc_ids):
+                keep.add(d)
+                j = self.net._index.get(d)
+                if j is None or self.net.texts[j] != src.texts[i]:
+                    self.net.add(d, src.texts[i], heading=src.sec[i] if i < len(src.sec) else "",
+                                 path=src.path)
+        self.net.remove_missing(keep)
+        self.net._build() if self.net._dirty else None
+        self.build_s += time.perf_counter() - t0
+        return time.perf_counter() - t0
+
+    def search(self, q, k):
+        hits, cost = self.net.search(q, k=k, assoc=self.assoc)
+        return [(_file(d), t, sc) for d, t, sc in hits], cost
+
+
+class TokenFusion:
+    """token-net+sections: the token network and the folder map with section walk, each asked for
+    its best passages, merged by reciprocal rank (c=60). No model. The two fail on different
+    questions, so the merge finds more than either."""
+
+    name = "token-net+sections"
+
+    def __init__(self, net_route, sections_route, depth=20, c=60):
+        self.a, self.b, self.depth, self.c = sections_route, net_route, depth, c
+
+    def search(self, q, k):
+        score, by, cost = {}, {}, 0
+        for route in (self.a, self.b):
+            hits, cst = route.search(q, self.depth)
+            cost += cst
+            for rank, h in enumerate(hits):
+                key = (h[0], h[1][:80])
+                score[key] = score.get(key, 0.0) + 1.0 / (self.c + rank + 1)
+                by[key] = h
+        best = sorted(score, key=lambda x: -score[x])[:k]
+        return [(by[x][0], by[x][1], score[x]) for x in best], cost

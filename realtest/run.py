@@ -45,7 +45,8 @@ from realtest.corpus import fetch_k8s  # noqa: E402
 from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
-                                 MapEmbed, MapLazy, MapRoute, RefGraphRoute, RefMapRoute, Shared)
+                                 MapEmbed, MapLazy, MapRoute, RefGraphRoute, RefMapRoute, Shared,
+                                 TokenFusion, TokenNetRoute)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -298,7 +299,7 @@ def main():
                          "walk with scoring every reference directly)")
     ap.add_argument("--answer-with",
                     default="keyword-all,embed-all,map,map+sections,map+lazy-cards,map+file-cards,"
-                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms",
+                            "map+meaning,map+cards,map+embed,embed-tree,ref-map,ref-map+terms,ref-graph,ref-graph+terms,token-net,token-net+assoc,token-net+sections",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
     args = ap.parse_args()
@@ -446,6 +447,21 @@ def main():
         retrievers.append(meaning)
     retrievers.append(MapEmbed(shared, embed_all))
 
+    # a network of tokens pointing at passages (no model); the second also follows word associations
+    tnet = tassoc = None
+    if "token-net" not in skip_set or "token-net+assoc" not in skip_set:
+        tnet = TokenNetRoute(shared)
+        log(f"  token-net: {len(tnet.net.vocab):,} tokens linked to {len(tnet.net.ids):,} passages "
+            f"in {tnet.build_s:.1f}s (no model)")
+        if "token-net" not in skip_set:
+            retrievers.append(tnet)
+        if "token-net+assoc" not in skip_set:
+            tassoc = TokenNetRoute(shared, assoc=True, name="token-net+assoc", share=tnet)
+            retrievers.append(tassoc)
+        if "token-net+sections" not in skip_set:
+            sec_route = next(r for r in retrievers if r.name == "map+sections")
+            retrievers.append(TokenFusion(tnet, sec_route))
+
     # the map walked by meaning, files embedded on arrival, with its own empty cache
     etree = None
     if "embed-tree" not in skip_set:
@@ -568,6 +584,8 @@ def main():
         ingest["map + keyword index"] = time.perf_counter() - t0
         new = [(d, t) for d, t in shared.chunks() if d.split("#")[0] in set(held)]
         ingest["embedding index"] = embed_all.add(new)
+        if tnet is not None:
+            ingest["token-net (add the new files)"] = tnet.sync()
         if lazy is not None:
             t0 = time.perf_counter()
             lazy.s.fm.sync()  # nothing to write now: new files get mapped when first visited
