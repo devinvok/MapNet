@@ -24,7 +24,7 @@ the few passages the map points to and write the answer.
 ## Quick start
 
 ```bash
-git clone https://github.com/galmaron26/MapNet.git
+git clone https://github.com/devinvok/MapNet.git
 cd MapNet
 pip install -r requirements.txt
 
