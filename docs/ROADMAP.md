@@ -21,10 +21,13 @@ Right file among the 4 returned passages. Embedding cost: at most 50 passages pe
 5 s on Gal's CPU the first time, nothing after; embed-all needs all 7,703 passages embedded first
 (about 12 minutes on the same machine).
 
-**What this means, plainly:** it ties embedding search on accuracy, but stays live and real time.
-It does **not** beat it: on the test half it is 5 points behind; across all 220 questions the gap is
-2 questions. So the claim we can make is "as good as embedding everything, without embedding
-everything, with live updates", not "better than embeddings".
+**What this means, plainly:** it finds the right file about as often as embedding search, while
+staying live and real time. It does **not** beat it: on the test half it is 5 points behind; across
+all 220 questions the gap is 2 questions. And once a 7B model answers from the passages (step 1
+below, measured the same day), embedding search is ahead: 86% of answers right against 77% (35
+questions). So the claim we can make is "finds files as well as embedding everything, without
+embedding everything, with live updates and permissions", not "better than embeddings"; and where
+a corpus can be embedded up front, embed-all is the better ranking layer under the map.
 
 ## What is closed, and why
 
@@ -73,6 +76,14 @@ says whether it is done.
    Done when: answers right for `token-net+rerank` is within 3 points of embed-all with the 7B reader.
    If it is more than 5 points behind, stop tuning ranking and use embed-all as the ranking layer
    under the map (keep everything else).
+
+   *Measured 31 Oct 2026 (35 hand-written questions, `qwen2.5:7b`):* answer right embed-all 86%,
+   token-net+rerank 77%, token-net 74%, map+sections 63%; answer in passages 89% / 83% / 74% / 69%;
+   right file 80% / 80% / 74% / 71%. 9 points behind (3 questions), so the rule applies:
+   **where the corpus can be embedded up front, rank with embed-all under the map**;
+   `token-net+rerank` stays the option for live corpora and for not embedding everything (it
+   costs ~7 s per question when nothing is cached). Both must go through the same permission
+   filter (embed-all does not have one yet: add it before it is used for real).
 2. **Access control in the token network and the shortlist.** *Done 31 Oct 2026*
    (`tests/test_tokennet_access.py`). With `roles`, only passages the caller may open are scored, and
    word rarity, passage length and associations are counted from those passages alone: scores equal

@@ -409,6 +409,13 @@ class LazyCarder:
                     self._map_file(path, "background")
             except Exception:
                 pass
+            finally:
+                self._q.task_done()
+
+    def wait_idle(self):
+        """Block until the background worker has finished everything queued so far (only with
+        background=True; without a worker the queue is never emptied)."""
+        self._q.join()
 
     def visit(self, paths):
         """Call with the files a lookup routed to, best first. Returns the files

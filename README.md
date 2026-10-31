@@ -145,26 +145,42 @@ See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for a 2-minute recorded demo plan
 | 23,040 | 98.7% | 99.7% | 23,040 | 297 |
 | 92,160 | 92.7% | **98.7%** | 92,160 | **575** |
 
-**Real documents (`realtest/`)**, 469 Kubernetes docs (concepts, tasks, tutorials, setup),
-35 hand-written questions, retrieval only, 4 passages per question, `nomic-embed-text`
-for embeddings and `qwen2.5:3b` writing the file descriptions:
+**Real documents (`realtest/`)**, 475 Kubernetes docs (concepts, tasks, tutorials, setup),
+7,703 passages, 4 passages handed to the reader per question, `nomic-embed-text` for
+embeddings, everything on a CPU laptop. "Right file" means the file the question was written
+from is among the 4 passages returned.
 
-| Method | Right file in top 4 | MRR | Median lookup |
+| Method | Hand-written questions (40): right file | Everyday-wording questions (220): right file | Embedding work |
 |---|---|---|---|
-| Embedding search over every passage | **80%** | 0.63 | 2.1 s |
-| ref-map (references + folder walk) | 54% | 0.48 | 11.7 s |
-| ref-map + question translation | 60% | 0.55 | 16.6 s |
-| ref-graph (same references, graph walk) | 57% | 0.49 | 11.6 s |
-| ref-graph + question translation | 63% | 0.56 | 13.7 s |
+| Words only (`token-net`, no model) | 75% | 38% | none |
+| Embedding search over every passage (`embed-all`) | 78% | 49% | all 7,703 passages, before the first question (~12 min) |
+| **Words find the neighbourhood, meaning picks the page** (`token-net+rerank`) | **80%** | **48%** | only the 50 passages a question reaches, on arrival (~5 s the first time) |
 
-The honest reading: on this set, plain embedding search over everything finds the right
-file more often than any of the reference-based variants. Scoring the question against
-every reference directly, with no walk at all, also misses 12 of the 35, so the shortfall
-comes from what the small model wrote in the file descriptions, not from the walk. What the
-map offers instead is permission-aware routing, files that are answerable the moment they
-are added, and reading a file only when a question reaches it. Whether better descriptions
-close the accuracy gap is the open question. Full tables and the failure analysis are in
-`realtest/results/` after a run.
+Answers, with `qwen2.5:7b` reading the 4 passages (35 hand-written questions, judged right
+or wrong):
+
+| Method | Answer in the passages | Answer right |
+|---|---|---|
+| Embedding search over every passage | **89%** | **86%** |
+| `token-net+rerank` | 83% | 77% |
+| Words only (`token-net`) | 74% | 74% |
+| Folder map with section walk (`map+sections`, no model) | 69% | 63% |
+
+The honest reading: `token-net+rerank` finds the right file as often as embedding search,
+but hands the reader slightly worse passages, and that costs 3 of 35 answers. On the test
+half of the everyday questions (108, scored once, after the method was chosen on the other
+half) it found the right file 51% of the time against embed-all's 56%. So embedding every
+passage is still the more accurate search here; what `token-net+rerank` offers is search
+that never embeds the corpus up front (7 s per question when nothing is cached yet), sees a
+new file on the next question, and scores only what the caller may open. The samples are
+small: one hand-written question is about 3 points, and a 7B judge kept only 114 of the 220
+generated questions as sensible, so treat differences of a few points as noise.
+
+We also tried, and measured, and closed: model-written file descriptions and reference
+maps (51–63% right file), word associations, recursive spreading over the word network,
+expanding questions with word embeddings, and letting a 7B model pick folders first (it
+picked a folder holding the right page 39% of the time). Why each failed is in
+[docs/ROADMAP.md](docs/ROADMAP.md). Full tables are written to `realtest/results/` by a run.
 
 Honest caveats for the synthetic benchmark, all detailed in [research/README.md](research/README.md):
 the data is synthetic; when routing takes a wrong turn the answer is never seen
@@ -188,6 +204,8 @@ mapnet/
   embedtree.py   the map walked by embeddings, embedded on arrival
   refmap.py      a namespace of references (DNS style), with question-to-term translation
   refgraph.py    the same references as a navigable graph (HNSW, built from scratch)
+  tokennet.py    a network of words pointing at the passages that hold them (BM25), per-caller permissions
+  shortlist.py   the token network's top 50, embedded on arrival and ordered by meaning (the search core)
   assistant.py   the full loop: notes -> map -> reader -> leave a note
   synthetic.py   synthetic company generator for the benchmark
 ask.py           interactive CLI
@@ -212,15 +230,18 @@ tests/           pytest suite (runs without any model or network)
 
 ## Roadmap
 
+The full plan, with what each step must show to count as done, is in
+[docs/ROADMAP.md](docs/ROADMAP.md). In short:
+
 - [x] Real-data test harness (`realtest/`) with embedding-search baseline and freshness test
-- [x] Run it with real models and publish the results (first run above)
-- [x] Small embedding model as the router encoder (`nomic-embed-text`)
-- [ ] Close the accuracy gap to embedding search on real documents (better file descriptions, page-level vectors)
-- [ ] Fallback to a wider search when routing confidence is low
-- [ ] Remote sources (MCP servers) so the map spans machines, DNS-style
-- [ ] Signed note authorship and per-agent reputation
-- [ ] Route *tools*, not only documents: give an agent only the MCP tools the map points to
-- [ ] Mobile build for an app that owns its own data
+- [x] Find the right file as often as embedding search without embedding the corpus up front (`token-net+rerank`)
+- [x] Permissions in the search core: restricted pages never returned, never embedded, and leave no trace in scores
+- [x] Answers measured with a 7B reader: embedding search still ahead (86% vs 77% on 35 questions)
+- [ ] A hand-checked question set large enough to tell a few points from noise
+- [ ] The same permission filter for embedding search, so either can rank under the map
+- [ ] An MCP server so agents can search, open, browse and leave notes, filtered by their roles
+- [ ] Agents search again with words they learned from the first passages
+- [ ] Learning from use: questions that were answered well guide later routing
 
 ## Contributing
 

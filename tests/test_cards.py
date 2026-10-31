@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -136,16 +137,17 @@ def test_harness_with_cards_and_subset(tmp_path):
     out = subprocess.run(
         [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
          "--questions", str(ROOT / "realtest/questions/sample-company.json"), "--retrieval-only",
-         "--only", "hr,legal,finance", "--data", str(data)],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=300)
+         "--only", "hr,legal,finance", "--data", str(data), "--results", str(tmp_path / "results")],
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=300,
+        # Windows pipes default to the console codepage; and no Ollama, even if one is running
+        # here, so the stand-in embedder is used and the test does not depend on a real model
+        env=dict(os.environ, PYTHONIOENCODING="utf-8", OLLAMA_HOST="http://127.0.0.1:9"))
     assert out.returncode == 0, out.stderr
     assert "map+cards" in out.stdout and "map+sections" in out.stdout
     assert "1 of" in out.stdout  # one file carded
-    shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
 
 
 # ---- mapping files on arrival (DNS style), and the full pipeline with fake models
-import os  # noqa: E402
 import time  # noqa: E402
 
 from fake_ollama import Handler, start  # noqa: E402
@@ -181,7 +183,9 @@ def test_files_are_mapped_on_arrival(tmp_path):
         a.fm.sync()
         t3 = a.ask(q, use_notes=False)
         assert [p for p, _ in t3.mapped] == ["finance/vendors/kalmar-metals.md"]
-        # a fresh assistant reuses the stored file maps without calling the model
+        # a fresh assistant reuses the stored file maps without calling the model (first let the
+        # first assistant's background worker finish, or its calls are counted against the second)
+        a.lazy.wait_idle()
         before = Handler.calls.get("/api/generate", 0)
         b = Assistant(folder, reader=ExtractiveReader(), cards=CardStore(tmp_path / "cards"),
                       map_files_with=OllamaReader("qwen2.5:3b", host=host), background=False)
@@ -198,22 +202,21 @@ def test_full_real_test_with_fake_models(tmp_path):
 
     srv, host = start()
     try:
-        env = dict(os.environ, OLLAMA_HOST=host)
+        env = dict(os.environ, OLLAMA_HOST=host, PYTHONIOENCODING="utf-8")
         out = subprocess.run(
             [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
              "--questions", str(ROOT / "realtest/questions/sample-company.json"),
-             "--data", str(tmp_path / "data")],
+             "--data", str(tmp_path / "data"), "--results", str(tmp_path / "results")],
             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600, env=env)
         assert out.returncode == 0, out.stderr[-2000:]
         for name in ["keyword-all", "embed-all", "map+sections", "map+lazy-cards", "map+meaning", "map+embed"]:
             assert f"| {name} |" in out.stdout, name
         assert "files mapped on first visit" in out.stdout
-        report = next((ROOT / "realtest" / "results").iterdir()) / "results.json"
+        report = next((tmp_path / "results").iterdir()) / "results.json"
         rows = json.loads(report.read_text(encoding="utf-8"))["rows"]
         assert all("answer" in r for r in rows)  # every method was answered by the (fake) model
     finally:
         srv.shutdown()
-        shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
 
 
 def test_file_descriptions_guide_the_router_to_the_file(tmp_path):
@@ -257,14 +260,15 @@ def test_full_chain_in_real_test(tmp_path):
     srv, host = start()
     try:
         data = tmp_path / "data"
-        env = dict(os.environ, OLLAMA_HOST=host)
+        env = dict(os.environ, OLLAMA_HOST=host, PYTHONIOENCODING="utf-8")
         build_out = subprocess.run([sys.executable, "-m", "mapnet.cards", str(ROOT / "examples/company"),
                                     "--store", str(data / "cards"), "--files-only"],
                                    cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=env, timeout=300)
         assert build_out.returncode == 0, build_out.stderr[-2000:]
         out = subprocess.run(
             [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
-             "--questions", str(ROOT / "realtest/questions/sample-company.json"), "--data", str(data)],
+             "--questions", str(ROOT / "realtest/questions/sample-company.json"), "--data", str(data),
+             "--results", str(tmp_path / "results")],
             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600, env=env)
         assert out.returncode == 0, out.stderr[-2000:]
         assert "| map+file-cards |" in out.stdout
@@ -272,7 +276,6 @@ def test_full_chain_in_real_test(tmp_path):
         assert "file descriptions (written on arrival)" in out.stdout
     finally:
         srv.shutdown()
-        shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)
 
 
 def test_three_roles_and_two_readers(tmp_path):
@@ -285,15 +288,16 @@ def test_three_roles_and_two_readers(tmp_path):
         out = subprocess.run(
             [sys.executable, "-m", "realtest.run", "--corpus", str(ROOT / "examples/company"),
              "--questions", str(ROOT / "realtest/questions/sample-company.json"), "--data", str(tmp_path / "d"),
+             "--results", str(tmp_path / "results"),
              "--map-model", "qwen2.5:3b", "--reader-model", "qwen2.5:3b,qwen2.5:7b",
              "--skip", "map+meaning,map+embed"],
             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=600,
-            env=dict(os.environ, OLLAMA_HOST=host))
+            env=dict(os.environ, OLLAMA_HOST=host, PYTHONIOENCODING="utf-8"))
         assert out.returncode == 0, out.stderr[-2000:]
         assert "Answer right (qwen2.5:3b) | Answer right (qwen2.5:7b)" in out.stdout
         assert "cartographer (writes the map): qwen2.5:3b" in out.stdout
         assert "navigator: words + nomic-embed-text" in out.stdout
-        res = json.loads(next((ROOT / "realtest" / "results").iterdir()).joinpath("results.json")
+        res = json.loads(next((tmp_path / "results").iterdir()).joinpath("results.json")
                          .read_text(encoding="utf-8"))
         answered = [r for r in res["rows"] if "by_reader" in r]
         assert answered and all(set(r["by_reader"]) == {"qwen2.5:3b", "qwen2.5:7b"} for r in answered)
@@ -303,4 +307,3 @@ def test_three_roles_and_two_readers(tmp_path):
         assert s7 >= s3
     finally:
         srv.shutdown()
-        shutil.rmtree(ROOT / "realtest" / "results", ignore_errors=True)

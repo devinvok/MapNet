@@ -257,6 +257,14 @@ lose: filler words (want, make, need) in chatty passages outscore the page that 
 is in token-net's top 50 for 70% of questions. A 7B judge kept only 53 of 112 dev questions as sensible,
 so the generated sets are noisy; a hand-checked v3 set is roadmap step 5.
 
+7B reader run (31 Oct, 35 hand-written): answer right embed-all 86%, token-net+rerank 77%, token-net 74%,
+map+sections 63%. By the rule fixed in advance (more than 5 points behind), embed-all becomes the ranking
+layer where the corpus can be embedded up front; token-net+rerank stays for live / no-precompute use.
+
+Never delete `realtest/results` wholesale: until 31 Oct the tests in `tests/test_cards.py` did, and a test
+run that day wiped every saved run (the console logs in `realtest/data/run*.log` survived). Tests now pass
+`--results <tmp>`; the harness has a `--results` flag.
+
 Access control is in (roadmap step 2): `TokenNet.search(..., roles=)` and `ShortlistRerank.search(...,
 roles=)` score only what the caller may open, with statistics from those passages only; `FolderMap.sync`
 now re-indexes files when an `.access` file above them changes. Tests: `tests/test_tokennet_access.py`.

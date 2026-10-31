@@ -304,9 +304,10 @@ def main():
                             "token-net,token-net+assoc,token-net+sections,page-mean,page-text,"
                             "token-net+page-mean,token-net+embed-all,token-prox,token-window,"
                             "token-prox+window,token-prox+window+page-mean,token-graph,token-graph+prox,token-graph+page-mean,"
-                            "token-conv-window,token-conv-graph,token-conv-graph2",
+                            "token-conv-window,token-conv-graph,token-conv-graph2,token-net+rerank,token-net+rerank-rrf",
                     help="which methods get their passages answered by the model")
     ap.add_argument("--data", default=str(HERE / "data"), help="where corpora and work copies live")
+    ap.add_argument("--results", default=str(HERE / "results"), help="where report.md and results.json go")
     args = ap.parse_args()
 
     t_start = time.perf_counter()
@@ -708,7 +709,7 @@ def main():
     total_s = time.perf_counter() - t_start
 
     # ---- report
-    out = HERE / "results" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = Path(args.results) / datetime.now().strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
     meta = dict(corpus=str(corpus), files=n_files, passages=n_chunks, k=args.k,
                 reader=", ".join(r.model for r in answer_readers) if answer_readers else None,
