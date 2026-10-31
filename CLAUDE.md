@@ -41,6 +41,7 @@ mapnet/            core.py (the map: nodes, routing, ACLs, live add/remove, feed
                    cards.py (CardStore, file descriptions, section cards, LazyCarder)
                    meaning.py (MeaningRouter, add-only), embedtree.py (EmbedTree)
                    refmap.py (RefMap, TermTranslator), refgraph.py (RefGraph = HNSW over references)
+                   tokennet.py (token network), shortlist.py (its shortlist reranked by meaning: the core)
 realtest/          run.py (the experiment), retrievers.py (all methods), corpus.py, judge.py,
                    qgen.py, setup.sh/.ps1, questions/k8s.json (40 hand-written Qs), README.md
 tests/             49 tests, no model/network needed (fake_ollama.py is a stand-in server)
@@ -240,6 +241,28 @@ about 1.3 s (16,283 tokens, 7,460 passages), 2 ms per question, live (`add`, rep
 Also open: `general_up` (labels/descriptions get a higher HNSW layer) is untested against plain random
 levels; the 3B translator's knowledge limits it (it wrote Docker Compose terms for "helper container"); a
 7B translator may help.
+
+## 7b. The decision of 31 Oct 2026 (supersedes 7 and 7a: follow `docs/ROADMAP.md`)
+
+Gal asked to close on one method and set a road. `research/gateway_experiment.py` compared everything on
+the 220 everyday-language questions (`k8s-plain-dev/test.json`; dev used for choosing, test scored once,
+after the choice). Chosen core: **`token-net+rerank`** (`mapnet/shortlist.py`): the token network's top
+50 passages, embedded on arrival, ordered by meaning. Right file: 48% of 220 vs embed-all 49%, token-net
+38%; hand-written 80% vs 78%. It ties embeddings; it does not beat them (test half: 51% vs 56%).
+
+Closed with measurements (see the table in the roadmap): recursive spreading 1-30 hops (settles after ~3,
+no gain), word embeddings for expansion, `tokengraph`/`tokenwin`, and gateways (a 7B model picking 3 of 45
+folders finds the right folder 39% of the time: the docs are filed by kind, not topic). Why the words
+lose: filler words (want, make, need) in chatty passages outscore the page that answers; the right page
+is in token-net's top 50 for 70% of questions. A 7B judge kept only 53 of 112 dev questions as sensible,
+so the generated sets are noisy; a hand-checked v3 set is roadmap step 5.
+
+Access control is in (roadmap step 2): `TokenNet.search(..., roles=)` and `ShortlistRerank.search(...,
+roles=)` score only what the caller may open, with statistics from those passages only; `FolderMap.sync`
+now re-indexes files when an `.access` file above them changes. Tests: `tests/test_tokennet_access.py`.
+
+`tests/test_cards.py` has 5 tests that fail on Gal's Windows machine before and after this work (a
+`0x97` byte in subprocess output, decoded as UTF-8); everything else passes.
 
 ## 8. Smoke-testing the harness without Ollama
 

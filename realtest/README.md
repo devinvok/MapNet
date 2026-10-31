@@ -337,6 +337,15 @@ A shorter run that compares only what matters for the reference map:
 python -m realtest.run --only concepts,tasks,tutorials,setup --map-model qwen2.5:3b --reader-model qwen2.5:3b --explain --skip map+meaning,map+file-cards,embed-tree,map+lazy-cards --answer-with embed-all,map+sections,ref-map,ref-map+terms,ref-graph,ref-graph+terms
 ```
 
+## Words find the neighbourhood, meaning picks the page (`token-net+rerank`, `token-net+rerank-rrf`)
+
+`mapnet/shortlist.py`: the token network's top 50 passages, embedded on arrival (only those, cached
+by their text) and ordered by meaning (`token-net+rerank`) or by a rank merge of word rank and meaning
+rank (`token-net+rerank-rrf`). Each variant has its own empty embedding cache per run, so first
+visits are counted. Needs Ollama for the embeddings. `research/gateway_experiment.py` is the
+experiment that chose it (220 everyday-language questions: right file 48% vs embed-all 49% and
+token-net 38%; 80% vs 78% on the hand-written set).
+
 ## The token network (`token-net`, `token-net+assoc`, `token-net+sections`)
 
 `mapnet/tokennet.py`: a network of **tokens** (whole words and identifiers: `maxSurge` gives

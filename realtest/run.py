@@ -46,7 +46,8 @@ from realtest.judge import ModelJudge, judge  # noqa: E402
 from realtest.qgen import generate  # noqa: E402
 from realtest.retrievers import (CombinedCards, EmbedAll, EmbedTreeRoute, KeywordAll,  # noqa: E402
                                  MapEmbed, MapLazy, MapRoute, PageMapRoute, RefGraphRoute, RefMapRoute,
-                                 Shared, TokenFusion, TokenGraphRoute, TokenNetRoute, TokenWinRoute)
+                                 Shared, TokenFusion, TokenGraphRoute, TokenNetRoute, TokenRerankRoute,
+                                 TokenWinRoute)
 
 for _stream in (sys.stdout, sys.stderr):  # Windows consoles can't show every character
     try:
@@ -465,6 +466,19 @@ def main():
         if "token-net+sections" not in skip_set:
             sec_route = next(r for r in retrievers if r.name == "map+sections")
             retrievers.append(TokenFusion(tnet, sec_route))
+        # the token network's shortlist ordered by meaning; each variant embeds on arrival into
+        # its own empty cache, so first visits are counted and not shared
+        for mode, name in (("embed", "token-net+rerank"), ("rrf", "token-net+rerank-rrf")):
+            if name in skip_set:
+                continue
+            if isinstance(emb, OllamaEmbedder):
+                rr_dir = data / "work" / f"{name}-cache"
+                if rr_dir.exists():
+                    shutil.rmtree(rr_dir)
+                rr_emb = OllamaEmbedder(emb.model, cache_dir=str(rr_dir))
+            else:
+                rr_emb = emb  # stand-in embedder (no Ollama)
+            retrievers.append(TokenRerankRoute(tnet, rr_emb, mode=mode, name=name))
 
     # the token network with positions: proximity of the question's words, and the words beside them
     twin = None

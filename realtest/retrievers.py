@@ -273,9 +273,10 @@ class TokenNetRoute:
             for i, d in enumerate(src.doc_ids):
                 keep.add(d)
                 j = self.net._index.get(d)
-                if j is None or self.net.texts[j] != src.texts[i]:
+                acl = frozenset(src.acl)
+                if j is None or self.net.texts[j] != src.texts[i] or self.net._acl[j] != acl:
                     self.net.add(d, src.texts[i], heading=src.sec[i] if i < len(src.sec) else "",
-                                 path=src.path)
+                                 path=src.path, acl=acl)
         self.net.remove_missing(keep)
         self.net._build() if self.net._dirty else None
         self.build_s += time.perf_counter() - t0
@@ -346,6 +347,25 @@ class TokenFusion:
                 by[key] = h
         best = sorted(score, key=lambda x: -score[x])[:k]
         return [(by[x][0], by[x][1], score[x]) for x in best], cost
+
+
+class TokenRerankRoute:
+    """token-net+rerank / token-net+rerank-rrf: the token network's top 50 passages ordered by
+    meaning (see mapnet/shortlist.py). Only those passages are embedded, on arrival, so every
+    first visit is counted; pass an embedder with its own empty cache."""
+
+    def __init__(self, net_route, embedder, mode="embed", short=50, name=None):
+        from mapnet.shortlist import ShortlistRerank
+        self.route = net_route
+        self.name = name or ("token-net+rerank" if mode == "embed" else f"token-net+rerank-{mode}")
+        self.rr = ShortlistRerank(net_route.net, embedder, short=short, mode=mode)
+
+    def sync(self):
+        return self.route.sync()
+
+    def search(self, q, k):
+        hits, reached, _ = self.rr.search(q, k=k)
+        return [(_file(d), t, sc) for d, t, sc in hits], reached
 
 
 class PageMapRoute:

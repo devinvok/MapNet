@@ -45,10 +45,10 @@ class PosTokenNet(TokenNet):
         self.last_expansion: dict = {}
 
     # --------------------------------------------------------------- building
-    def add(self, doc_id, text, heading="", path=""):
+    def add(self, doc_id, text, heading="", path="", **kw):
         seq = tokens(text)
         new = doc_id not in self._index
-        super().add(doc_id, text, heading=heading, path=path)
+        super().add(doc_id, text, heading=heading, path=path, **kw)
         i = self._index[doc_id]
         if new:
             self._seqs.append(seq)

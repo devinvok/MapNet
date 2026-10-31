@@ -125,6 +125,8 @@ class FolderMap:
         self.cards = cards  # optional CardStore: agent-written section cards, by file content
         self.lock = threading.RLock()
         self.seen: dict[str, tuple[float, int]] = {}  # rel path -> (mtime, size)
+        self._access_seen: dict[str, tuple[float, int]] = {}  # folder with an .access file -> (mtime, size)
+        self._access_now: dict[str, tuple[float, int]] = {}
         self.on_change = on_change  # callback(kind, rel_path, seconds)
         self._stop = threading.Event()
 
@@ -146,10 +148,15 @@ class FolderMap:
 
     def _scan(self):
         found = {}
+        self._access_now = {}
         for dirpath, dirnames, filenames in os.walk(self.root):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
             for fn in filenames:
                 p = Path(dirpath) / fn
+                if fn == ".access":
+                    st = p.stat()
+                    self._access_now[Path(dirpath).relative_to(self.root).as_posix()] = (st.st_mtime, st.st_size)
+                    continue
                 if fn.startswith(".") or p.suffix.lower() not in SUPPORTED:
                     continue
                 st = p.stat()
@@ -188,6 +195,15 @@ class FolderMap:
         """One pass: apply every added, changed and deleted file. Returns changes."""
         found = self._scan()
         changes = []
+        # an .access file added, edited or removed changes who may open every file beneath it, so
+        # those files are indexed again (a revoked role must lose access on this pass, not later)
+        moved = {d for d in set(self._access_now) | set(self._access_seen)
+                 if self._access_now.get(d) != self._access_seen.get(d)}
+
+        def under_moved(rel):
+            parent = Path(rel).parent.as_posix()
+            return any(d == "." or parent == d or parent.startswith(d + "/") for d in moved)
+
         with self.lock:
             for rel in sorted(set(self.seen) - set(found)):
                 t0 = time.perf_counter()
@@ -195,7 +211,7 @@ class FolderMap:
                 changes.append(("deleted", rel, time.perf_counter() - t0))
             for rel, sig in sorted(found.items()):
                 old = self.seen.get(rel)
-                if old == sig:
+                if old == sig and not (moved and under_moved(rel)):
                     continue
                 t0 = time.perf_counter()
                 if old is not None:
@@ -207,6 +223,7 @@ class FolderMap:
                     continue
                 changes.append(("changed" if old else "added", rel, time.perf_counter() - t0))
             self.seen = found
+            self._access_seen = self._access_now
         if self.on_change:
             for c in changes:
                 self.on_change(*c)
