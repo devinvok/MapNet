@@ -1,7 +1,7 @@
 # MapNet: briefing for the next agent
 
 You are taking over a research prototype from a previous Claude session. Read this whole file first.
-The owner is Gal (GitHub `galmaron26`). The repo is https://github.com/galmaron26/walk--and-talk-ai
+The owner is Gal (GitHub `galmaron26`). The repo is https://github.com/galmaron26/MapNet
 (package name `mapnet`, public, MIT). Everything below was learned over many working sessions with him.
 
 ## 1. The idea
